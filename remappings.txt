@@ -1,1 +1,2 @@
 openzeppelin/=lib/openzeppelin-contracts/contracts/
+solidity-lib/=lib/solidity-lib/contracts/libraries/
