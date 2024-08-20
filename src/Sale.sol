@@ -5,52 +5,13 @@ import {TransferHelper} from "solidity-lib/TransferHelper.sol";
 import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 import {IERC721} from "openzeppelin/token/ERC721/IERC721.sol";
 import {Ownable} from "openzeppelin/access/Ownable.sol";
+import {SaleStructs} from "./SaleStructs.sol";
 
 /** @notice Sale contract for SIR
     @notice Accepts USDT, USDC & DAI
     @notice Users can lock up to 5 Buterin Cards or Mined JPEGs
  */
-contract Sale is Ownable {
-    event SaleEnded(uint40 timeSaleEnded);
-    event DepositWasReduced();
-
-    error WrongStablecoin();
-    error NullDeposit();
-    error SaleIsOver();
-    error TooManyNfts();
-    error NftsLocked();
-    error SaleIsLive();
-
-    enum Stablecoin {
-        USDT,
-        USDC,
-        DAI
-    }
-
-    struct LockedButerinCards {
-        uint8 number;
-        uint16[5] ids;
-    }
-
-    struct LockedMinedJpegs {
-        uint8 number;
-        uint8[5] ids;
-    }
-
-    struct Contribution {
-        Stablecoin stablecoin;
-        uint24 amountFinalNoDecimals;
-        uint24 amountWithdrawableNoDecimals;
-        uint40 timeSaleEnded;
-        LockedButerinCards lockedButerinCards;
-        LockedMinedJpegs lockedMinedJpegs;
-    }
-
-    struct SaleState {
-        uint24 totalContributionsNoDecimals;
-        uint40 timeSaleEnded;
-    }
-
+contract Sale is SaleStructs, Ownable {
     address private constant _USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
     address private constant _USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address private constant _DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
@@ -66,7 +27,7 @@ contract Sale is Ownable {
 
     uint24 public constant MAX_CONTRIBUTIONS_NO_DECIMALS = 500_000; // [$]
 
-    SaleState public state;
+    SaleState private _state;
 
     mapping(address contributor => Contribution) private _contributions;
 
@@ -93,7 +54,7 @@ contract Sale is Ownable {
         if (amountNoDecimals == 0) revert NullDeposit();
 
         // Revert if sale is over
-        SaleState memory state_ = state;
+        SaleState memory state_ = _state;
         if (state_.timeSaleEnded > 0) revert SaleIsOver();
 
         // Limit the contribution if it exceeds the maximum
@@ -112,7 +73,7 @@ contract Sale is Ownable {
             _endSale(state_);
         }
 
-        // Update state
+        // Update _state
         state_.totalContributionsNoDecimals += amountNoDecimals;
 
         // Update contribution
@@ -128,13 +89,13 @@ contract Sale is Ownable {
             revert WrongStablecoin();
         }
         contribution.amountWithdrawableNoDecimals += amountNoDecimals;
-        contribution.timeSaleEnded = uint40(block.timestamp);
+        contribution.timeLastContribution = uint40(block.timestamp);
 
         // Lock NFTs
         _lockNfts(buterinCardIds, minedJpegIds, contribution);
 
-        // Save contribution and state
-        state = state_;
+        // Save contribution and _state
+        _state = state_;
         _contributions[msg.sender] = contribution;
 
         // Transfer tokens to the contract
@@ -154,7 +115,7 @@ contract Sale is Ownable {
      */
     function withdraw() external {
         // Revert if sale is over
-        SaleState memory state_ = state;
+        SaleState memory state_ = _state;
         if (state_.timeSaleEnded > 0) revert SaleIsOver();
 
         // Revert if the user has made no contribution in the last 24 hours
@@ -168,9 +129,9 @@ contract Sale is Ownable {
         contribution.amountWithdrawableNoDecimals = 0;
         _contributions[msg.sender] = contribution;
 
-        // Update state
+        // Update _state
         state_.totalContributionsNoDecimals -= amountWithdrawableNoDecimals;
-        state = state_;
+        _state = state_;
 
         // Transfer tokens to the user
         TransferHelper.safeTransfer(
@@ -193,7 +154,7 @@ contract Sale is Ownable {
         uint8[] calldata minedJpegIds
     ) external {
         // Revert if sale is over
-        SaleState memory state_ = state;
+        SaleState memory state_ = _state;
         if (state_.timeSaleEnded > 0) revert SaleIsOver();
 
         // Lock NFTs
@@ -210,8 +171,8 @@ contract Sale is Ownable {
     function withdrawNfts() external {
         // Revert if it is less than 1 year since the sale ended
         if (
-            state.timeSaleEnded == 0 ||
-            block.timestamp < state.timeSaleEnded + 365 days
+            _state.timeSaleEnded == 0 ||
+            block.timestamp < _state.timeSaleEnded + 365 days
         ) revert NftsLocked();
 
         // Withdraw NFTs
@@ -254,8 +215,8 @@ contract Sale is Ownable {
     /** @notice Ends the sale prematurley
      */
     function endSale() external onlyOwner {
-        // Get state
-        SaleState memory state_ = state;
+        // Get _state
+        SaleState memory state_ = _state;
 
         // Revert if sale is already over
         if (state_.timeSaleEnded > 0) revert SaleIsOver();
@@ -263,15 +224,15 @@ contract Sale is Ownable {
         // End sale
         _endSale(state_);
 
-        // Update state
-        state = state_;
+        // Update _state
+        _state = state_;
     }
 
     /** @notice Withdraws all USDT, USDC & DAI from the contract if the sale is over
      */
     function withdrawFunds(address to) external onlyOwner {
         // Revert if sale is live
-        SaleState memory state_ = state;
+        SaleState memory state_ = _state;
         if (state_.timeSaleEnded == 0) revert SaleIsLive();
 
         // Withdraw USDT
@@ -296,23 +257,37 @@ contract Sale is Ownable {
         );
     }
 
+    /** @notice Withdraws any ERC20 token in case it was accidentally sent to the contract
+     */
+    function withdrawExoticERC20(address token, address to) external onlyOwner {
+        TransferHelper.safeTransfer(
+            token,
+            to,
+            IERC20(token).balanceOf(address(this))
+        );
+    }
+
     /** @notice Just in case something goes wrong, owner can unlock all NFTs
      */
     function unlockAllNfts() external onlyOwner {
         // It simulates that the sale ended on Jan 1, 1970, which effectively allows every contributor to withdraw their NFTs
         // It also haults deposits.
-        state.timeSaleEnded = 1;
+        _state.timeSaleEnded = 1;
     }
 
     ////////////////////////////////////////////////////////////////////////////////
     //////////////////// R E A D -  O N L Y  F U N C T I O N S ////////////////////
     //////////////////////////////////////////////////////////////////////////////
 
+    function state() public view returns (SaleState memory) {
+        return _state;
+    }
+
     function contributions(
         address contributor
     ) public view returns (Contribution memory) {
         Contribution memory contribution = _contributions[contributor];
-        if (block.timestamp >= contribution.timeSaleEnded + 24 hours) {
+        if (block.timestamp >= contribution.timeLastContribution + 24 hours) {
             // If 24 hours have passed since the last deposit, the user cannot withdraw the previous deposit
             contribution.amountFinalNoDecimals += contribution
                 .amountWithdrawableNoDecimals;
