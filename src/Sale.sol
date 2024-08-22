@@ -182,6 +182,9 @@ contract Sale is SaleStructs, Ownable {
         LockedMinedJpegs memory lockedMinedJpegs = contribution
             .lockedMinedJpegs;
 
+        if (lockedButerinCards.number == 0 && lockedMinedJpegs.number == 0)
+            revert NoNfts();
+
         // Transfer Buterin Cards
         for (uint256 i = 0; i < lockedButerinCards.number; i++) {
             _BUTERIN_CARDS.transferFrom(
@@ -189,6 +192,7 @@ contract Sale is SaleStructs, Ownable {
                 msg.sender,
                 lockedButerinCards.ids[i]
             );
+            emit ButerinCardUnlocked(lockedButerinCards.ids[i]);
         }
 
         // Transfer Mined JPEGs
@@ -198,6 +202,7 @@ contract Sale is SaleStructs, Ownable {
                 msg.sender,
                 lockedMinedJpegs.ids[i]
             );
+            emit MinedJpegUnlocked(lockedMinedJpegs.ids[i]);
         }
 
         // Update contribution
@@ -327,12 +332,14 @@ contract Sale is SaleStructs, Ownable {
             contribution.lockedButerinCards.ids[
                 contribution.lockedButerinCards.number++
             ] = buterinCardIds[i];
+            emit ButerinCardLocked(buterinCardIds[i]);
         }
 
         for (uint256 i = 0; i < minedJpegIds.length; i++) {
             contribution.lockedMinedJpegs.ids[
                 contribution.lockedMinedJpegs.number++
             ] = minedJpegIds[i];
+            emit MinedJpegLocked(minedJpegIds[i]);
         }
 
         // Transfer Buterin Cards

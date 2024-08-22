@@ -7,8 +7,10 @@ contract SaleStructs {
 
     event Deposit(uint24 amountNoDecimals);
     event Withdrawal(uint24 amountNoDecimals);
-    event LockedButerinCard(uint16 tokenId);
-    event LockedMinedJpeg(uint8 tokenId);
+    event ButerinCardLocked(uint16 tokenId);
+    event MinedJpegLocked(uint8 tokenId);
+    event ButerinCardUnlocked(uint16 tokenId);
+    event MinedJpegUnlocked(uint8 tokenId);
 
     error WrongStablecoin();
     error NullDeposit();
@@ -16,6 +18,7 @@ contract SaleStructs {
     error TooManyNfts();
     error NftsLocked();
     error SaleIsLive();
+    error NoNfts();
 
     enum Stablecoin {
         USDT,
