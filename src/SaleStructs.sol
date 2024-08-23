@@ -2,6 +2,8 @@
 pragma solidity ^0.8.13;
 
 contract SaleStructs {
+    uint24 public constant MAX_CONTRIBUTIONS_NO_DECIMALS = 500_000; // [$]
+
     event SaleEnded(uint40 timeSaleEnded);
     event DepositWasReduced();
 

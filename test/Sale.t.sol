@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 import "../src/Sale.sol";
 import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {IERC721Enumerable} from "openzeppelin/token/ERC721/extensions/IERC721Enumerable.sol";
 import {SaleStructs} from "../src/SaleStructs.sol";
 
@@ -128,96 +129,41 @@ contract SaleTestTokens is SaleStructs, Test {
 
     // TEST safeTransferFrom TO Sale FAILS
 
-    function testFuzz_lockNftsNotApproved(NftsToLock memory nftsToLock) public {
+    function testFuzz_lockUnapprovedNfts(NftsToLock memory nftsToLock) public {
         vm.startPrank(nft_user);
 
-        // Skip time
-        nftsToLock.timeElapsed = uint40(
-            _bound(
-                nftsToLock.timeElapsed,
-                0,
-                type(uint40).max - block.timestamp
-            )
-        );
-        skip(nftsToLock.timeElapsed);
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock);
 
         // Lock NFTs
-        uint256 numButerinCards = _BUTERIN_CARDS.balanceOf(nft_user) <
-            nftsToLock.numButerinCards
-            ? _BUTERIN_CARDS.balanceOf(nft_user)
-            : nftsToLock.numButerinCards;
-        uint256 numMinedJpegs = _MINED_JPEG.balanceOf(nft_user) <
-            nftsToLock.numMinedJpegs
-            ? _MINED_JPEG.balanceOf(nft_user)
-            : nftsToLock.numMinedJpegs;
-
-        // TokenIds of NFTs to be locked
-        uint16[] memory buterinCardIds = new uint16[](numButerinCards);
-        for (uint256 j = 0; j < numButerinCards; j++) {
-            buterinCardIds[j] = uint16(
-                _BUTERIN_CARDS.tokenOfOwnerByIndex(nft_user, j)
-            );
-        }
-        uint8[] memory minedJpegIds = new uint8[](numMinedJpegs);
-        for (uint256 j = 0; j < numMinedJpegs; j++) {
-            minedJpegIds[j] = uint8(
-                _MINED_JPEG.tokenOfOwnerByIndex(nft_user, j)
-            );
-        }
-
-        // Lock NFTs
-        if (numButerinCards + numMinedJpegs > 0) {
+        if (buterinCardIds.length + minedJpegIds.length > 0) {
             vm.expectRevert();
             sale.lockNfts(buterinCardIds, minedJpegIds);
         }
     }
 
-    function testFuzz_lockNftsSaleIsOver(NftsToLock memory nftsToLock) public {
+    function testFuzz_lockNftsWhenSaleIsOver(
+        NftsToLock memory nftsToLock
+    ) public {
         vm.startPrank(nft_user);
 
         // NFT user approve contract
         _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
         _MINED_JPEG.setApprovalForAll(address(sale), true);
 
-        // Skip time
-        nftsToLock.timeElapsed = uint40(
-            _bound(
-                nftsToLock.timeElapsed,
-                0,
-                type(uint40).max - block.timestamp
-            )
-        );
-        skip(nftsToLock.timeElapsed);
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock);
 
         // End sale
         vm.stopPrank();
         vm.prank(address(this));
         sale.endSale();
-
-        // Lock NFTs
-        vm.startPrank(nft_user);
-        uint256 numButerinCards = _BUTERIN_CARDS.balanceOf(nft_user) <
-            nftsToLock.numButerinCards
-            ? _BUTERIN_CARDS.balanceOf(nft_user)
-            : nftsToLock.numButerinCards;
-        uint256 numMinedJpegs = _MINED_JPEG.balanceOf(nft_user) <
-            nftsToLock.numMinedJpegs
-            ? _MINED_JPEG.balanceOf(nft_user)
-            : nftsToLock.numMinedJpegs;
-
-        // TokenIds of NFTs to be locked
-        uint16[] memory buterinCardIds = new uint16[](numButerinCards);
-        for (uint256 j = 0; j < numButerinCards; j++) {
-            buterinCardIds[j] = uint16(
-                _BUTERIN_CARDS.tokenOfOwnerByIndex(nft_user, j)
-            );
-        }
-        uint8[] memory minedJpegIds = new uint8[](numMinedJpegs);
-        for (uint256 j = 0; j < numMinedJpegs; j++) {
-            minedJpegIds[j] = uint8(
-                _MINED_JPEG.tokenOfOwnerByIndex(nft_user, j)
-            );
-        }
 
         // Lock NFTs
         vm.expectRevert(SaleIsOver.selector);
@@ -234,49 +180,24 @@ contract SaleTestTokens is SaleStructs, Test {
         // Make repeated calls to lockNfts
         uint256 totalNftsLocked;
         for (uint256 i = 0; i < nftsToLock.length; i++) {
-            // Skip time
-            nftsToLock[i].timeElapsed = uint40(
-                _bound(
-                    nftsToLock[i].timeElapsed,
-                    0,
-                    type(uint40).max - block.timestamp
-                )
-            );
-            skip(nftsToLock[i].timeElapsed);
-
-            // Lock NFTs
-            uint256 numButerinCards = _BUTERIN_CARDS.balanceOf(nft_user) <
-                nftsToLock[i].numButerinCards
-                ? _BUTERIN_CARDS.balanceOf(nft_user)
-                : nftsToLock[i].numButerinCards;
-            uint256 numMinedJpegs = _MINED_JPEG.balanceOf(nft_user) <
-                nftsToLock[i].numMinedJpegs
-                ? _MINED_JPEG.balanceOf(nft_user)
-                : nftsToLock[i].numMinedJpegs;
-
-            // TokenIds of NFTs to be locked
-            uint16[] memory buterinCardIds = new uint16[](numButerinCards);
-            for (uint256 j = 0; j < numButerinCards; j++) {
-                buterinCardIds[j] = uint16(
-                    _BUTERIN_CARDS.tokenOfOwnerByIndex(nft_user, j)
-                );
-            }
-            uint8[] memory minedJpegIds = new uint8[](numMinedJpegs);
-            for (uint256 j = 0; j < numMinedJpegs; j++) {
-                minedJpegIds[j] = uint8(
-                    _MINED_JPEG.tokenOfOwnerByIndex(nft_user, j)
-                );
-            }
+            // Get tokenIds of NFTs to be locked
+            (
+                uint16[] memory buterinCardIds,
+                uint8[] memory minedJpegIds
+            ) = _getTokenIds(nftsToLock[i]);
 
             // Check if we expect revert
-            if (totalNftsLocked + numButerinCards + numMinedJpegs > 5) {
+            if (
+                totalNftsLocked + buterinCardIds.length + minedJpegIds.length >
+                5
+            ) {
                 vm.expectRevert(TooManyNfts.selector);
             } else {
-                for (uint256 j = 0; j < numButerinCards; j++) {
+                for (uint256 j = 0; j < buterinCardIds.length; j++) {
                     vm.expectEmit();
                     emit ButerinCardLocked(buterinCardIds[j]);
                 }
-                for (uint256 j = 0; j < numMinedJpegs; j++) {
+                for (uint256 j = 0; j < minedJpegIds.length; j++) {
                     vm.expectEmit();
                     emit MinedJpegLocked(minedJpegIds[j]);
                 }
@@ -286,15 +207,18 @@ contract SaleTestTokens is SaleStructs, Test {
             sale.lockNfts(buterinCardIds, minedJpegIds);
 
             // Check owner of NFTs
-            if (totalNftsLocked + numButerinCards + numMinedJpegs <= 5) {
-                for (uint256 j = 0; j < numButerinCards; j++) {
+            if (
+                totalNftsLocked + buterinCardIds.length + minedJpegIds.length <=
+                5
+            ) {
+                for (uint256 j = 0; j < buterinCardIds.length; j++) {
                     assertEq(
                         _BUTERIN_CARDS.ownerOf(buterinCardIds[j]),
                         address(sale),
                         "wrong owner of Buterin Card"
                     );
                 }
-                for (uint256 j = 0; j < numMinedJpegs; j++) {
+                for (uint256 j = 0; j < minedJpegIds.length; j++) {
                     assertEq(
                         _MINED_JPEG.ownerOf(minedJpegIds[j]),
                         address(sale),
@@ -302,7 +226,7 @@ contract SaleTestTokens is SaleStructs, Test {
                     );
                 }
 
-                totalNftsLocked += numButerinCards + numMinedJpegs;
+                totalNftsLocked += buterinCardIds.length + minedJpegIds.length;
             }
 
             // Check state
@@ -338,6 +262,32 @@ contract SaleTestTokens is SaleStructs, Test {
                 "NFTs locked do not match"
             );
         }
+    }
+
+    function test_lockSameNftsTwice() public {
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(
+                NftsToLock({
+                    numButerinCards: 1,
+                    numMinedJpegs: 1,
+                    timeElapsed: 0
+                })
+            );
+
+        // NFT user approve contract
+        vm.startPrank(nft_user);
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Lock NFTs
+        sale.lockNfts(buterinCardIds, minedJpegIds);
+
+        // Lock same NFTs again
+        vm.expectRevert();
+        sale.lockNfts(buterinCardIds, minedJpegIds);
     }
 
     function testFuzz_withdrawNftsFailsCuzTooEarly(
@@ -382,7 +332,7 @@ contract SaleTestTokens is SaleStructs, Test {
         sale.withdrawNfts();
     }
 
-    function testFuzz_withdrawNftsFailsCuzSaleIsLive(
+    function testFuzz_withdrawNftsWhileSaleIsLive(
         NftsToLock[5] memory nftsToLock
     ) public {
         // Lock NFTs
@@ -489,5 +439,175 @@ contract SaleTestTokens is SaleStructs, Test {
         vm.prank(nft_user);
         vm.expectRevert(NoNfts.selector);
         sale.withdrawNfts();
+    }
+
+    function testFuzz_depositNothingAndLockNfts(
+        uint256 stablecoin,
+        NftsToLock memory nftsToLock
+    ) public {
+        stablecoin = _bound(stablecoin, 0, 2);
+
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        // Approve sale contract to transfer NFTs
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Deposit and lock NFTs
+        vm.expectRevert(NullDeposit.selector);
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin),
+            0,
+            buterinCardIds,
+            minedJpegIds
+        );
+    }
+
+    function testFuzz_depositAndLockNftsWhenSaleIsOver(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock
+    ) public {
+        stablecoin = _bound(stablecoin, 0, 2);
+
+        amountNoDecimals = uint24(
+            _bound(amountNoDecimals, 1, type(uint24).max)
+        );
+
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock);
+
+        // End sale
+        vm.stopPrank();
+        vm.prank(address(this));
+        sale.endSale();
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        // Approve sale contract to transfer NFTs
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Deal stablecoin
+        _dealStablecoins(amountNoDecimals);
+
+        // Deposit and lock NFTs
+        vm.expectRevert(SaleIsOver.selector);
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin),
+            amountNoDecimals,
+            buterinCardIds,
+            minedJpegIds
+        );
+    }
+
+    function testFuzz_depositAndLockNfts(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock
+    ) public {
+        stablecoin = _bound(stablecoin, 0, 2);
+
+        amountNoDecimals = uint24(
+            _bound(amountNoDecimals, 1, type(uint24).max)
+        );
+
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        // Approve sale contract to transfer NFTs
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Deal stablecoin
+        _dealStablecoins(amountNoDecimals);
+
+        // Deposit and lock NFTs
+        if (buterinCardIds.length + minedJpegIds.length > 5) {
+            vm.expectRevert(TooManyNfts.selector);
+        }
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin),
+            amountNoDecimals,
+            buterinCardIds,
+            minedJpegIds
+        );
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /////////////////////// P R I V A T E  F U N C T I O N S //////////////////////
+    //////////////////////////////////////////////////////////////////////////////
+
+    function _getTokenIds(
+        NftsToLock memory nftsToLock
+    )
+        private
+        returns (uint16[] memory buterinCardIds, uint8[] memory minedJpegIds)
+    {
+        // Skip time
+        nftsToLock.timeElapsed = uint40(
+            _bound(
+                nftsToLock.timeElapsed,
+                0,
+                type(uint40).max - block.timestamp
+            )
+        );
+        skip(nftsToLock.timeElapsed);
+
+        // Lock NFTs
+        uint256 numButerinCards = _BUTERIN_CARDS.balanceOf(nft_user) <
+            nftsToLock.numButerinCards
+            ? _BUTERIN_CARDS.balanceOf(nft_user)
+            : nftsToLock.numButerinCards;
+        uint256 numMinedJpegs = _MINED_JPEG.balanceOf(nft_user) <
+            nftsToLock.numMinedJpegs
+            ? _MINED_JPEG.balanceOf(nft_user)
+            : nftsToLock.numMinedJpegs;
+
+        // TokenIds of NFTs to be locked
+        buterinCardIds = new uint16[](numButerinCards);
+        for (uint256 j = 0; j < numButerinCards; j++) {
+            buterinCardIds[j] = uint16(
+                _BUTERIN_CARDS.tokenOfOwnerByIndex(nft_user, j)
+            );
+        }
+        minedJpegIds = new uint8[](numMinedJpegs);
+        for (uint256 j = 0; j < numMinedJpegs; j++) {
+            minedJpegIds[j] = uint8(
+                _MINED_JPEG.tokenOfOwnerByIndex(nft_user, j)
+            );
+        }
+    }
+
+    function _approveStablecoins() private {
+        SafeERC20.forceApprove(_USDT, address(sale), type(uint256).max);
+        _USDC.approve(address(sale), type(uint256).max);
+        _DAI.approve(address(sale), type(uint256).max);
+    }
+
+    function _dealStablecoins(uint24 amountNoDecimals) private {
+        deal(address(_USDT), nft_user, uint256(amountNoDecimals) * 1e6, true);
+        deal(address(_USDC), nft_user, uint256(amountNoDecimals) * 1e6, true);
+        deal(address(_DAI), nft_user, uint256(amountNoDecimals) * 1e18, true);
     }
 }

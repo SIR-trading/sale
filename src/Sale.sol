@@ -25,8 +25,6 @@ contract Sale is SaleStructs, Ownable {
     IERC721 private constant _MINED_JPEG =
         IERC721(0x7cd51FA7E155805C34F333ba493608742A67Da8e);
 
-    uint24 public constant MAX_CONTRIBUTIONS_NO_DECIMALS = 500_000; // [$]
-
     SaleState private _state;
 
     mapping(address contributor => Contribution) private _contributions;
@@ -217,7 +215,7 @@ contract Sale is SaleStructs, Ownable {
     ///////////////////////// O W N E R  F U N C T I O N S ////////////////////////
     //////////////////////////////////////////////////////////////////////////////
 
-    /** @notice Ends the sale prematurley
+    /** @notice Ends the sale prematurely
      */
     function endSale() external onlyOwner {
         // Get _state
