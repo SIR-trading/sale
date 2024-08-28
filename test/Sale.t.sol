@@ -8,6 +8,8 @@ import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {IERC721Enumerable} from "openzeppelin/token/ERC721/extensions/IERC721Enumerable.sol";
 import {SaleStructs} from "../src/SaleStructs.sol";
 
+/** @dev The environment varible NFT_HOLDER must be set to the address of someone holding at least 6 Buterin Cards and Mined JPEGs in total.
+ */
 contract SaleTest is SaleStructs, Test {
     Sale sale;
 
@@ -119,6 +121,15 @@ contract SaleTestTokens is SaleStructs, Test {
         alice = address(0x123);
         bob = address(0x456);
         nft_user = vm.envAddress("NFT_HOLDER");
+
+        // Ensure nft_user holds NFTs
+        assert(_BUTERIN_CARDS.balanceOf(nft_user) > 0);
+        assert(_MINED_JPEG.balanceOf(nft_user) > 0);
+        assert(
+            _BUTERIN_CARDS.balanceOf(nft_user) +
+                _MINED_JPEG.balanceOf(nft_user) >
+                5
+        );
     }
 
     struct NftsToLock {
@@ -127,7 +138,40 @@ contract SaleTestTokens is SaleStructs, Test {
         uint40 timeElapsed;
     }
 
-    // TEST safeTransferFrom TO Sale FAILS
+    function test_safeTransferToSaleFails() public {
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(
+                NftsToLock({
+                    numButerinCards: 1,
+                    numMinedJpegs: 1,
+                    timeElapsed: 0
+                })
+            );
+
+        // Start prank
+        vm.startPrank(nft_user);
+
+        // Safe transfers fail
+        vm.expectRevert();
+        _BUTERIN_CARDS.safeTransferFrom(
+            nft_user,
+            address(sale),
+            buterinCardIds[0]
+        );
+        vm.expectRevert();
+        _MINED_JPEG.safeTransferFrom(nft_user, address(sale), minedJpegIds[0]);
+
+        // Unsafe transfers work
+        vm.expectEmit();
+        emit Transfer(nft_user, address(sale), buterinCardIds[0]);
+        _BUTERIN_CARDS.transferFrom(nft_user, address(sale), buterinCardIds[0]);
+        vm.expectEmit();
+        emit Transfer(nft_user, address(sale), minedJpegIds[0]);
+        _MINED_JPEG.transferFrom(nft_user, address(sale), minedJpegIds[0]);
+    }
 
     function testFuzz_lockUnapprovedNfts(NftsToLock memory nftsToLock) public {
         vm.startPrank(nft_user);
@@ -514,15 +558,65 @@ contract SaleTestTokens is SaleStructs, Test {
         );
     }
 
-    function testFuzz_depositAndLockNfts(
+    function testFuzz_depositAndLockTooManyNfts(
         uint256 stablecoin,
         uint24 amountNoDecimals,
         NftsToLock memory nftsToLock
     ) public {
         stablecoin = _bound(stablecoin, 0, 2);
+        nftsToLock.numButerinCards = uint16(
+            _bound(nftsToLock.numButerinCards, 6, type(uint16).max)
+        );
 
         amountNoDecimals = uint24(
             _bound(amountNoDecimals, 1, type(uint24).max)
+        );
+
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock);
+        vm.assume(buterinCardIds.length + minedJpegIds.length > 5);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        // Approve sale contract to transfer NFTs
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Deal stablecoin
+        _dealStablecoins(amountNoDecimals);
+
+        // Deposit and lock NFTs
+        // if (buterinCardIds.length + minedJpegIds.length > 5)
+        vm.expectRevert(TooManyNfts.selector);
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin),
+            amountNoDecimals,
+            buterinCardIds,
+            minedJpegIds
+        );
+    }
+
+    function testFuzz_depositAndLockNfts(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock
+    ) public returns (uint24) {
+        stablecoin = _bound(stablecoin, 0, 2);
+
+        amountNoDecimals = uint24(
+            _bound(amountNoDecimals, 1, MAX_CONTRIBUTIONS_NO_DECIMALS - 1)
+        );
+
+        nftsToLock.numButerinCards = uint16(
+            _bound(nftsToLock.numButerinCards, 0, 5)
+        );
+        nftsToLock.numMinedJpegs = uint8(
+            _bound(nftsToLock.numMinedJpegs, 0, 5 - nftsToLock.numButerinCards)
         );
 
         // Get tokenIds of NFTs to be locked
@@ -541,10 +635,18 @@ contract SaleTestTokens is SaleStructs, Test {
 
         // Deal stablecoin
         _dealStablecoins(amountNoDecimals);
+        uint256 oldBalance = (
+            stablecoin == 0 ? _USDT : stablecoin == 1 ? _USDC : _DAI
+        ).balanceOf(nft_user);
 
         // Deposit and lock NFTs
-        if (buterinCardIds.length + minedJpegIds.length > 5) {
-            vm.expectRevert(TooManyNfts.selector);
+        for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            vm.expectEmit();
+            emit ButerinCardLocked(buterinCardIds[i]);
+        }
+        for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            vm.expectEmit();
+            emit MinedJpegLocked(minedJpegIds[i]);
         }
         sale.depositAndLockNfts(
             Stablecoin(stablecoin),
@@ -552,7 +654,421 @@ contract SaleTestTokens is SaleStructs, Test {
             buterinCardIds,
             minedJpegIds
         );
+
+        // Check if deposit was substracted from the user's oldBalance
+        uint256 newBalance = (
+            stablecoin == 0 ? _USDT : stablecoin == 1 ? _USDC : _DAI
+        ).balanceOf(nft_user);
+        assertEq(
+            newBalance,
+            oldBalance -
+                10 ** (stablecoin == 0 ? 6 : stablecoin == 1 ? 6 : 18) *
+                uint256(amountNoDecimals)
+        );
+
+        vm.stopPrank();
+        return amountNoDecimals;
     }
+
+    function testFuzz_depositAndLockNftsEndsSale(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock
+    ) public {
+        stablecoin = _bound(stablecoin, 0, 2);
+
+        amountNoDecimals = uint24(
+            _bound(
+                amountNoDecimals,
+                MAX_CONTRIBUTIONS_NO_DECIMALS,
+                type(uint24).max
+            )
+        );
+
+        nftsToLock.numButerinCards = uint16(
+            _bound(nftsToLock.numButerinCards, 0, 5)
+        );
+        nftsToLock.numMinedJpegs = uint8(
+            _bound(nftsToLock.numMinedJpegs, 0, 5 - nftsToLock.numButerinCards)
+        );
+
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        // Approve sale contract to transfer NFTs
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Deal stablecoin
+        _dealStablecoins(amountNoDecimals);
+        uint256 oldBalance = (
+            stablecoin == 0 ? _USDT : stablecoin == 1 ? _USDC : _DAI
+        ).balanceOf(nft_user);
+
+        // Deposit and lock NFTs
+        if (amountNoDecimals > MAX_CONTRIBUTIONS_NO_DECIMALS) {
+            vm.expectEmit();
+            emit DepositWasReduced();
+        }
+        emit SaleEnded(uint40(block.timestamp));
+        for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            vm.expectEmit();
+            emit ButerinCardLocked(buterinCardIds[i]);
+        }
+        for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            vm.expectEmit();
+            emit MinedJpegLocked(minedJpegIds[i]);
+        }
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin),
+            amountNoDecimals,
+            buterinCardIds,
+            minedJpegIds
+        );
+
+        // Check if deposit was substracted from the user's oldBalance
+        uint256 newBalance = (
+            stablecoin == 0 ? _USDT : stablecoin == 1 ? _USDC : _DAI
+        ).balanceOf(nft_user);
+        assertEq(
+            newBalance,
+            oldBalance -
+                10 ** (stablecoin == 0 ? 6 : stablecoin == 1 ? 6 : 18) *
+                uint256(MAX_CONTRIBUTIONS_NO_DECIMALS)
+        );
+
+        // Check sale actually ended
+        SaleState memory state = sale.state();
+        assertEq(state.timeSaleEnded, uint40(block.timestamp));
+        assertEq(
+            state.totalContributionsNoDecimals,
+            MAX_CONTRIBUTIONS_NO_DECIMALS
+        );
+        vm.stopPrank();
+    }
+
+    function testFuzz_redepositWrongStablecoin(
+        uint256 stablecoin1,
+        uint24 amountNoDecimals1,
+        NftsToLock memory nftsToLock1,
+        uint256 stablecoin2,
+        uint24 amountNoDecimals2,
+        NftsToLock memory nftsToLock2
+    ) public {
+        stablecoin1 = _bound(stablecoin1, 0, 2);
+
+        amountNoDecimals1 = testFuzz_depositAndLockNfts(
+            stablecoin1,
+            amountNoDecimals1,
+            nftsToLock1
+        );
+
+        stablecoin2 = _bound(stablecoin2, 0, 2);
+        vm.assume(stablecoin1 != stablecoin2);
+
+        amountNoDecimals2 = uint24(
+            _bound(amountNoDecimals2, 1, type(uint24).max)
+        );
+
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock2);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        // Approve sale contract to transfer NFTs
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Deal stablecoin
+        _dealStablecoins(amountNoDecimals2);
+
+        // Deposit and lock NFTs
+        vm.expectRevert(WrongStablecoin.selector);
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin2),
+            amountNoDecimals2,
+            buterinCardIds,
+            minedJpegIds
+        );
+    }
+
+    function testFuzz_redepositAndLockTooManyNfts(
+        uint256 stablecoin1,
+        uint24 amountNoDecimals1,
+        NftsToLock memory nftsToLock1,
+        uint256 stablecoin2,
+        uint24 amountNoDecimals2,
+        NftsToLock memory nftsToLock2
+    ) public {
+        stablecoin1 = _bound(stablecoin1, 0, 2);
+
+        amountNoDecimals1 = testFuzz_depositAndLockNfts(
+            stablecoin1,
+            amountNoDecimals1,
+            nftsToLock1
+        );
+
+        stablecoin2 = stablecoin1;
+
+        amountNoDecimals2 = uint24(
+            _bound(amountNoDecimals2, 1, type(uint24).max)
+        );
+
+        nftsToLock2.numButerinCards = uint16(
+            _bound(
+                nftsToLock2.numButerinCards,
+                nftsToLock2.numMinedJpegs > 6
+                    ? 0
+                    : 6 - nftsToLock2.numMinedJpegs,
+                type(uint16).max
+            )
+        );
+
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock2);
+        vm.assume(buterinCardIds.length + minedJpegIds.length > 5);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        // Approve sale contract to transfer NFTs
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Deal stablecoin
+        _dealStablecoins(amountNoDecimals2);
+
+        // Deposit and lock NFTs
+        vm.expectRevert(TooManyNfts.selector);
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin2),
+            amountNoDecimals2,
+            buterinCardIds,
+            minedJpegIds
+        );
+    }
+
+    function testFuzz_redepositAndLockNfts(
+        uint256 stablecoin1,
+        uint24 amountNoDecimals1,
+        NftsToLock memory nftsToLock1,
+        uint256 stablecoin2,
+        uint24 amountNoDecimals2,
+        NftsToLock memory nftsToLock2
+    ) public {
+        stablecoin1 = _bound(stablecoin1, 0, 2);
+
+        amountNoDecimals1 = testFuzz_depositAndLockNfts(
+            stablecoin1,
+            amountNoDecimals1,
+            nftsToLock1
+        );
+
+        stablecoin2 = stablecoin1;
+
+        amountNoDecimals2 = uint24(
+            _bound(amountNoDecimals2, 1, type(uint24).max)
+        );
+
+        // Ensure no more than 5 NFTs are locked
+        Contribution memory contribution = sale.contributions(nft_user);
+        nftsToLock2.numButerinCards = uint16(
+            _bound(
+                nftsToLock2.numButerinCards,
+                0,
+                5 -
+                    contribution.lockedButerinCards.number -
+                    contribution.lockedMinedJpegs.number
+            )
+        );
+        nftsToLock2.numMinedJpegs = uint8(
+            _bound(
+                nftsToLock2.numMinedJpegs,
+                0,
+                5 -
+                    contribution.lockedButerinCards.number -
+                    contribution.lockedMinedJpegs.number -
+                    nftsToLock2.numButerinCards
+            )
+        );
+
+        // Get tokenIds of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock2);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        // Approve sale contract to transfer NFTs
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Deal stablecoin
+        _dealStablecoins(amountNoDecimals2);
+        uint256 oldBalance = (
+            stablecoin2 == 0 ? _USDT : stablecoin2 == 1 ? _USDC : _DAI
+        ).balanceOf(nft_user);
+
+        // Deposit and lock NFTs
+        bool depositReduced = uint256(amountNoDecimals1) + amountNoDecimals2 >
+            MAX_CONTRIBUTIONS_NO_DECIMALS;
+        if (depositReduced) {
+            vm.expectEmit();
+            emit DepositWasReduced();
+        }
+        for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            vm.expectEmit();
+            emit ButerinCardLocked(buterinCardIds[i]);
+        }
+        for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            vm.expectEmit();
+            emit MinedJpegLocked(minedJpegIds[i]);
+        }
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin2),
+            amountNoDecimals2,
+            buterinCardIds,
+            minedJpegIds
+        );
+
+        // Check if deposit was substracted from the user's oldBalance
+        uint256 newBalance = (
+            stablecoin2 == 0 ? _USDT : stablecoin2 == 1 ? _USDC : _DAI
+        ).balanceOf(nft_user);
+        assertEq(
+            newBalance,
+            oldBalance -
+                10 ** (stablecoin2 == 0 ? 6 : stablecoin2 == 1 ? 6 : 18) *
+                uint256(
+                    depositReduced
+                        ? MAX_CONTRIBUTIONS_NO_DECIMALS - amountNoDecimals1
+                        : amountNoDecimals2
+                )
+        );
+    }
+
+    function testFuzz_withdrawFailsCuzSaleIsOver(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock
+    ) public {
+        testFuzz_depositAndLockNftsEndsSale(
+            stablecoin,
+            amountNoDecimals,
+            nftsToLock
+        );
+
+        // Withdraw
+        vm.prank(nft_user);
+        vm.expectRevert(SaleIsOver.selector);
+        sale.withdraw();
+    }
+
+    function test_withdrawFailsCuzNoDeposit() public {
+        // Withdraw
+        vm.prank(nft_user);
+        vm.expectRevert(NullDeposit.selector);
+        sale.withdraw();
+    }
+
+    function testFuzz_withdraw(
+        uint256 stablecoin,
+        uint24[4] memory amountNoDecimals,
+        uint40[4] memory timeElapsed
+    ) public {
+        stablecoin = _bound(stablecoin, 0, 2);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        uint24 cumulativeAmountNoDecimals;
+        uint24 cumulativeWithdrawableAmountNoDecimals;
+        for (uint256 i = 0; i < amountNoDecimals.length; i++) {
+            // To make sure the sale doesn't end
+            amountNoDecimals[i] = uint24(
+                _bound(
+                    amountNoDecimals[i],
+                    1,
+                    MAX_CONTRIBUTIONS_NO_DECIMALS -
+                        cumulativeAmountNoDecimals -
+                        4 +
+                        i
+                )
+            );
+
+            // Deal stablecoin
+            _dealStablecoins(amountNoDecimals[i]);
+
+            // Deposit
+            sale.depositAndLockNfts(
+                Stablecoin(stablecoin),
+                amountNoDecimals[i],
+                new uint16[](0),
+                new uint8[](0)
+            );
+
+            // Skip time
+            timeElapsed[i] = uint40(
+                _bound(timeElapsed[i], 0, type(uint40).max - block.timestamp)
+            );
+            skip(timeElapsed[i]);
+
+            // Update cumulative amounts
+            cumulativeAmountNoDecimals += amountNoDecimals[i];
+            if (timeElapsed[i] < 24 hours) {
+                cumulativeWithdrawableAmountNoDecimals += amountNoDecimals[i];
+            } else {
+                cumulativeWithdrawableAmountNoDecimals = 0;
+            }
+        }
+
+        // Balance
+        uint256 oldBalance = (
+            stablecoin == 0 ? _USDT : stablecoin == 1 ? _USDC : _DAI
+        ).balanceOf(nft_user);
+
+        // Withdraw
+        if (cumulativeWithdrawableAmountNoDecimals == 0) {
+            vm.expectRevert(NullDeposit.selector);
+        } else {
+            vm.expectEmit();
+            emit Withdrawal(cumulativeWithdrawableAmountNoDecimals);
+        }
+        sale.withdraw();
+
+        // New balance
+        uint256 newBalance = (
+            stablecoin == 0 ? _USDT : stablecoin == 1 ? _USDC : _DAI
+        ).balanceOf(nft_user);
+        assertEq(
+            newBalance,
+            oldBalance +
+                10 ** (stablecoin == 0 ? 6 : stablecoin == 1 ? 6 : 18) *
+                uint256(cumulativeWithdrawableAmountNoDecimals)
+        );
+    }
+
+    // TEST STABLECOIN CAN BE CHANGE IF INITIAL DEPOSIT IS WITHDRAWN
 
     ////////////////////////////////////////////////////////////////////////////////
     /////////////////////// P R I V A T E  F U N C T I O N S //////////////////////

@@ -131,6 +131,9 @@ contract Sale is SaleStructs, Ownable {
         state_.totalContributionsNoDecimals -= amountWithdrawableNoDecimals;
         _state = state_;
 
+        // Emit event
+        emit Withdrawal(amountWithdrawableNoDecimals);
+
         // Transfer tokens to the user
         TransferHelper.safeTransfer(
             contribution.stablecoin == Stablecoin.USDT
