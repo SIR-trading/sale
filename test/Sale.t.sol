@@ -1068,6 +1068,58 @@ contract SaleTestTokens is SaleStructs, Test {
         );
     }
 
+    function testFuzz_withdrawAndRedepositDifferentStablecoin(
+        uint256 stablecoinA,
+        uint24 amountNoDecimalsA,
+        uint40 timeElapsedA,
+        uint256 stablecoinB,
+        uint24 amountNoDecimalsB
+    ) public {
+        stablecoinA = _bound(stablecoinA, 0, 2);
+        stablecoinB = _bound(stablecoinB, 0, 2);
+        vm.assume(stablecoinA != stablecoinB);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(nft_user);
+        _approveStablecoins();
+
+        amountNoDecimalsA = uint24(
+            _bound(amountNoDecimalsA, 1, MAX_CONTRIBUTIONS_NO_DECIMALS - 1)
+        );
+
+        // Deal stablecoin
+        _dealStablecoins(amountNoDecimalsA);
+
+        // Deposit
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoinA),
+            amountNoDecimalsA,
+            new uint16[](0),
+            new uint8[](0)
+        );
+
+        // Withdraw
+        sale.withdraw();
+
+        // Skip time
+        skip(timeElapsedA);
+
+        amountNoDecimalsB = uint24(
+            _bound(amountNoDecimalsB, 1, MAX_CONTRIBUTIONS_NO_DECIMALS - 1)
+        );
+
+        // Deal stablecoin
+        _dealStablecoins(amountNoDecimalsB);
+
+        // Deposit
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoinB),
+            amountNoDecimalsB,
+            new uint16[](0),
+            new uint8[](0)
+        );
+    }
+
     // TEST STABLECOIN CAN BE CHANGE IF INITIAL DEPOSIT IS WITHDRAWN
 
     ////////////////////////////////////////////////////////////////////////////////
