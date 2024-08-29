@@ -306,6 +306,8 @@ contract SaleTestTokens is SaleStructs, Test {
                 "NFTs locked do not match"
             );
         }
+
+        vm.stopPrank();
     }
 
     function test_lockSameNftsTwice() public {
@@ -332,157 +334,6 @@ contract SaleTestTokens is SaleStructs, Test {
         // Lock same NFTs again
         vm.expectRevert();
         sale.lockNfts(buterinCardIds, minedJpegIds);
-    }
-
-    function testFuzz_withdrawNftsFailsCuzTooEarly(
-        NftsToLock[5] memory nftsToLock
-    ) public {
-        // Lock NFTs
-        testFuzz_lockNfts(nftsToLock);
-
-        // End sale
-        vm.stopPrank();
-        vm.prank(address(this));
-        sale.endSale();
-
-        // Skip 1 year - 1 second
-        skip(365 days - 1);
-
-        // Withdraw NFTs
-        vm.prank(nft_user);
-        vm.expectRevert(NftsLocked.selector);
-        sale.withdrawNfts();
-    }
-
-    function testFuzz_withdrawNftsFailsCuzNoNfts(
-        NftsToLock[5] memory nftsToLock,
-        address user
-    ) public {
-        // Lock NFTs
-        testFuzz_lockNfts(nftsToLock);
-
-        // End sale
-        vm.stopPrank();
-        vm.prank(address(this));
-        sale.endSale();
-
-        // Skip 1 year - 1 second
-        skip(365 days - 1);
-
-        // Withdraw NFTs
-        vm.assume(user != nft_user);
-        vm.prank(user);
-        vm.expectRevert();
-        sale.withdrawNfts();
-    }
-
-    function testFuzz_withdrawNftsWhileSaleIsLive(
-        NftsToLock[5] memory nftsToLock
-    ) public {
-        // Lock NFTs
-        testFuzz_lockNfts(nftsToLock);
-        vm.stopPrank();
-
-        // Skip 1 year
-        skip(365 days);
-
-        // Withdraw NFTs
-        vm.prank(nft_user);
-        vm.expectRevert(NftsLocked.selector);
-        sale.withdrawNfts();
-    }
-
-    function testFuzz_withdrawNfts(NftsToLock[5] memory nftsToLock) public {
-        // Lock NFTs
-        testFuzz_lockNfts(nftsToLock);
-
-        // End sale
-        vm.stopPrank();
-        vm.prank(address(this));
-        sale.endSale();
-
-        // Skip 1 year
-        skip(365 days);
-
-        // Withdraw NFTs
-        vm.startPrank(nft_user);
-        uint16[] memory buterinCardIds = new uint16[](
-            _BUTERIN_CARDS.balanceOf(address(sale))
-        );
-        for (uint256 i = 0; i < buterinCardIds.length; i++) {
-            buterinCardIds[i] = uint16(
-                _BUTERIN_CARDS.tokenOfOwnerByIndex(address(sale), i)
-            );
-            vm.expectEmit();
-            emit ButerinCardUnlocked(buterinCardIds[i]);
-        }
-        uint8[] memory minedJpegIds = new uint8[](
-            _MINED_JPEG.balanceOf(address(sale))
-        );
-        for (uint256 i = 0; i < minedJpegIds.length; i++) {
-            minedJpegIds[i] = uint8(
-                _MINED_JPEG.tokenOfOwnerByIndex(address(sale), i)
-            );
-            vm.expectEmit();
-            emit MinedJpegUnlocked(minedJpegIds[i]);
-        }
-        if (buterinCardIds.length + minedJpegIds.length == 0) {
-            vm.expectRevert(NoNfts.selector);
-        }
-        sale.withdrawNfts();
-
-        // Check owner of NFTs
-        for (uint256 i = 0; i < buterinCardIds.length; i++) {
-            assertEq(
-                _BUTERIN_CARDS.ownerOf(buterinCardIds[i]),
-                nft_user,
-                "wrong owner of Buterin Card"
-            );
-        }
-        for (uint256 i = 0; i < minedJpegIds.length; i++) {
-            assertEq(
-                _MINED_JPEG.ownerOf(minedJpegIds[i]),
-                nft_user,
-                "wrong owner of Mined JPEG"
-            );
-        }
-
-        // Check contributor's state
-        Contribution memory contribution = sale.contributions(nft_user);
-        assertEq(
-            contribution.amountFinalNoDecimals,
-            0,
-            "wrong amountFinalNoDecimals"
-        );
-        assertEq(
-            contribution.amountWithdrawableNoDecimals,
-            0,
-            "wrong amountWithdrawableNoDecimals"
-        );
-        assertEq(
-            contribution.timeLastContribution,
-            0,
-            "wrong timeLastContribution"
-        );
-        assertEq(
-            contribution.lockedButerinCards.number +
-                contribution.lockedMinedJpegs.number,
-            0,
-            "NFTs locked do not match"
-        );
-    }
-
-    function testFuzz_withdrawNftsTwice(
-        NftsToLock[5] memory nftsToLock
-    ) public {
-        // Lock NFTs
-        testFuzz_withdrawNfts(nftsToLock);
-        vm.stopPrank();
-
-        // Withdraw NFTs again
-        vm.prank(nft_user);
-        vm.expectRevert(NoNfts.selector);
-        sale.withdrawNfts();
     }
 
     function testFuzz_depositNothingAndLockNfts(
@@ -648,6 +499,7 @@ contract SaleTestTokens is SaleStructs, Test {
             vm.expectEmit();
             emit MinedJpegLocked(minedJpegIds[i]);
         }
+        emit Deposit(Stablecoin(stablecoin), amountNoDecimals);
         sale.depositAndLockNfts(
             Stablecoin(stablecoin),
             amountNoDecimals,
@@ -674,7 +526,10 @@ contract SaleTestTokens is SaleStructs, Test {
         uint256 stablecoin,
         uint24 amountNoDecimals,
         NftsToLock memory nftsToLock
-    ) public {
+    )
+        public
+        returns (uint16[] memory buterinCardIds, uint8[] memory minedJpegIds)
+    {
         stablecoin = _bound(stablecoin, 0, 2);
 
         amountNoDecimals = uint24(
@@ -693,10 +548,7 @@ contract SaleTestTokens is SaleStructs, Test {
         );
 
         // Get tokenIds of NFTs to be locked
-        (
-            uint16[] memory buterinCardIds,
-            uint8[] memory minedJpegIds
-        ) = _getTokenIds(nftsToLock);
+        (buterinCardIds, minedJpegIds) = _getTokenIds(nftsToLock);
 
         // Approve sale contract to transfer stablecoin
         vm.startPrank(nft_user);
@@ -726,6 +578,7 @@ contract SaleTestTokens is SaleStructs, Test {
             vm.expectEmit();
             emit MinedJpegLocked(minedJpegIds[i]);
         }
+        emit Deposit(Stablecoin(stablecoin), amountNoDecimals);
         sale.depositAndLockNfts(
             Stablecoin(stablecoin),
             amountNoDecimals,
@@ -943,6 +796,7 @@ contract SaleTestTokens is SaleStructs, Test {
             vm.expectEmit();
             emit MinedJpegLocked(minedJpegIds[i]);
         }
+        emit Deposit(Stablecoin(stablecoin2), amountNoDecimals2);
         sale.depositAndLockNfts(
             Stablecoin(stablecoin2),
             amountNoDecimals2,
@@ -1052,7 +906,10 @@ contract SaleTestTokens is SaleStructs, Test {
             vm.expectRevert(NullDeposit.selector);
         } else {
             vm.expectEmit();
-            emit Withdrawal(cumulativeWithdrawableAmountNoDecimals);
+            emit Withdrawal(
+                Stablecoin(stablecoin),
+                cumulativeWithdrawableAmountNoDecimals
+            );
         }
         sale.withdraw();
 
@@ -1120,11 +977,231 @@ contract SaleTestTokens is SaleStructs, Test {
         );
     }
 
-    // TEST STABLECOIN CAN BE CHANGE IF INITIAL DEPOSIT IS WITHDRAWN
+    function testFuzz_withdrawNftsAfterInsufficientTime(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock,
+        uint40 timeElapsed
+    ) public {
+        // Lock NFTs and end sale
+        testFuzz_depositAndLockNftsEndsSale(
+            stablecoin,
+            amountNoDecimals,
+            nftsToLock
+        );
+
+        // Skip insufficient time after sale ends
+        timeElapsed = uint40(_bound(timeElapsed, 0, 365 days - 1));
+        skip(timeElapsed);
+
+        // Try to withdraw NFTs
+        vm.expectRevert(NftsLocked.selector);
+        vm.prank(nft_user);
+        sale.withdrawNfts();
+    }
+
+    function testFuzz_withdrawNftsAfterInsufficientTime(
+        NftsToLock[5] memory nftsToLock
+    ) public {
+        // Lock NFTs
+        testFuzz_lockNfts(nftsToLock);
+
+        // End sale
+        vm.prank(address(this));
+        sale.endSale();
+
+        // Skip 1 year - 1 second
+        skip(365 days - 1);
+
+        // Withdraw NFTs
+        vm.prank(nft_user);
+        vm.expectRevert(NftsLocked.selector);
+        sale.withdrawNfts();
+    }
+
+    function testFuzz_withdrawMissingNfts(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        uint40 timeElapsed
+    ) public {
+        // Lock NFTs and end sale
+        testFuzz_depositAndLockNftsEndsSale(
+            stablecoin,
+            amountNoDecimals,
+            NftsToLock({numButerinCards: 0, numMinedJpegs: 0, timeElapsed: 0})
+        );
+
+        // Skip insufficient time after sale ends
+        timeElapsed = uint40(_bound(timeElapsed, 365 days, type(uint40).max));
+        skip(timeElapsed);
+
+        // Try to withdraw NFTs
+        vm.expectRevert(NoNfts.selector);
+        vm.prank(nft_user);
+        sale.withdrawNfts();
+    }
+
+    function testFuzz_withdrawMissingNfts(
+        NftsToLock[5] memory nftsToLock,
+        address user
+    ) public {
+        // Lock NFTs
+        testFuzz_lockNfts(nftsToLock);
+
+        // End sale
+        vm.prank(address(this));
+        sale.endSale();
+
+        // Skip 1 year - 1 second
+        skip(365 days - 1);
+
+        // Withdraw NFTs
+        vm.assume(user != nft_user);
+        vm.prank(user);
+        vm.expectRevert();
+        sale.withdrawNfts();
+    }
+
+    function testFuzz_withdrawNfts(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock
+    ) public {
+        // Lock NFTs and end sale
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = testFuzz_depositAndLockNftsEndsSale(
+                stablecoin,
+                amountNoDecimals,
+                nftsToLock
+            );
+        vm.assume(buterinCardIds.length + minedJpegIds.length > 0);
+
+        // Skip insufficient time after sale ends
+        nftsToLock.timeElapsed = uint40(
+            _bound(nftsToLock.timeElapsed, 365 days, type(uint40).max)
+        );
+        skip(nftsToLock.timeElapsed);
+
+        // Try to withdraw NFTs
+        for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            vm.expectEmit();
+            emit ButerinCardUnlocked(buterinCardIds[i]);
+        }
+        for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            vm.expectEmit();
+            emit MinedJpegUnlocked(minedJpegIds[i]);
+        }
+        vm.prank(nft_user);
+        sale.withdrawNfts();
+
+        // Check NFTs are withdrawn
+        _checkNftsAreWithdrawn(buterinCardIds, minedJpegIds);
+    }
+
+    function testFuzz_withdrawNfts(NftsToLock[5] memory nftsToLock) public {
+        // Lock NFTs
+        testFuzz_lockNfts(nftsToLock);
+
+        // End sale
+        vm.prank(address(this));
+        sale.endSale();
+
+        // Skip 1 year
+        skip(365 days);
+
+        // Withdraw NFTs
+        uint16[] memory buterinCardIds = new uint16[](
+            _BUTERIN_CARDS.balanceOf(address(sale))
+        );
+        for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            buterinCardIds[i] = uint16(
+                _BUTERIN_CARDS.tokenOfOwnerByIndex(address(sale), i)
+            );
+            vm.expectEmit();
+            emit ButerinCardUnlocked(buterinCardIds[i]);
+        }
+        uint8[] memory minedJpegIds = new uint8[](
+            _MINED_JPEG.balanceOf(address(sale))
+        );
+        for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            minedJpegIds[i] = uint8(
+                _MINED_JPEG.tokenOfOwnerByIndex(address(sale), i)
+            );
+            vm.expectEmit();
+            emit MinedJpegUnlocked(minedJpegIds[i]);
+        }
+        if (buterinCardIds.length + minedJpegIds.length == 0) {
+            vm.expectRevert(NoNfts.selector);
+        }
+        vm.prank(nft_user);
+        sale.withdrawNfts();
+
+        // Check NFTs are withdrawn
+        _checkNftsAreWithdrawn(buterinCardIds, minedJpegIds);
+    }
+
+    function testFuzz_withdrawNftsWhileSaleIsLive(
+        NftsToLock[5] memory nftsToLock
+    ) public {
+        // Lock NFTs
+        testFuzz_lockNfts(nftsToLock);
+
+        // Skip 1 year
+        skip(365 days);
+
+        // Withdraw NFTs
+        vm.prank(nft_user);
+        vm.expectRevert(NftsLocked.selector);
+        sale.withdrawNfts();
+    }
+
+    function testFuzz_withdrawNftsTwice(
+        NftsToLock[5] memory nftsToLock
+    ) public {
+        // Lock NFTs
+        testFuzz_withdrawNfts(nftsToLock);
+
+        // Withdraw NFTs again
+        vm.prank(nft_user);
+        vm.expectRevert(NoNfts.selector);
+        sale.withdrawNfts();
+    }
 
     ////////////////////////////////////////////////////////////////////////////////
     /////////////////////// P R I V A T E  F U N C T I O N S //////////////////////
     //////////////////////////////////////////////////////////////////////////////
+
+    function _checkNftsAreWithdrawn(
+        uint16[] memory buterinCardIds,
+        uint8[] memory minedJpegIds
+    ) private view {
+        // Check owner of NFTs
+        for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            assertEq(
+                _BUTERIN_CARDS.ownerOf(buterinCardIds[i]),
+                nft_user,
+                "wrong owner of Buterin Card"
+            );
+        }
+        for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            assertEq(
+                _MINED_JPEG.ownerOf(minedJpegIds[i]),
+                nft_user,
+                "wrong owner of Mined JPEG"
+            );
+        }
+
+        // Check contributor's state
+        Contribution memory contribution = sale.contributions(nft_user);
+        assertEq(
+            contribution.lockedButerinCards.number +
+                contribution.lockedMinedJpegs.number,
+            0,
+            "NFTs locked do not match"
+        );
+    }
 
     function _getTokenIds(
         NftsToLock memory nftsToLock

@@ -96,6 +96,9 @@ contract Sale is SaleStructs, Ownable {
         _state = state_;
         _contributions[msg.sender] = contribution;
 
+        // Emit event
+        emit Deposit(stablecoin, amountNoDecimals);
+
         // Transfer tokens to the contract
         TransferHelper.safeTransferFrom(
             stablecoin == Stablecoin.USDT
@@ -132,7 +135,7 @@ contract Sale is SaleStructs, Ownable {
         _state = state_;
 
         // Emit event
-        emit Withdrawal(amountWithdrawableNoDecimals);
+        emit Withdrawal(contribution.stablecoin, amountWithdrawableNoDecimals);
 
         // Transfer tokens to the user
         TransferHelper.safeTransfer(
