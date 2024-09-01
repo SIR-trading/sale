@@ -240,6 +240,8 @@ contract Sale is SaleStructs, Ownable {
     /** @notice Withdraws all USDT, USDC & DAI from the contract if the sale is over
      */
     function withdrawFunds(address to) external onlyOwner {
+        if (to == address(0)) revert NullAddress();
+
         // Revert if sale is live
         SaleState memory state_ = _state;
         if (state_.timeSaleEnded == 0) revert SaleIsLive();
@@ -266,9 +268,11 @@ contract Sale is SaleStructs, Ownable {
         );
     }
 
-    /** @notice Withdraws any ERC20 token in case it was accidentally sent to the contract
+    /** @notice Withdraws any ERC20 token in case any worthy token (that is not USDT, USDC or DAI) was sent to the contract
      */
     function withdrawExoticERC20(address token, address to) external onlyOwner {
+        if (to == address(0)) revert NullAddress();
+
         TransferHelper.safeTransfer(
             token,
             to,

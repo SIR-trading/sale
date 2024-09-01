@@ -4,12 +4,12 @@ pragma solidity ^0.8.13;
 import "forge-std/Test.sol";
 import "../src/Sale.sol";
 import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
+import {ERC20} from "openzeppelin/token/ERC20/ERC20.sol";
 import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {IERC721Enumerable} from "openzeppelin/token/ERC721/extensions/IERC721Enumerable.sol";
 import {SaleStructs} from "../src/SaleStructs.sol";
 
-/** @dev The environment varible NFT_HOLDER must be set to the address of someone holding at least 6 Buterin Cards and Mined JPEGs in total.
- */
+/// @dev The environment varible NFT_HOLDER must be set to the address of someone holding at least 6 Buterin Cards and Mined JPEGs in total.
 contract SaleTest is SaleStructs, Test {
     Sale sale;
 
@@ -82,9 +82,19 @@ contract SaleTest is SaleStructs, Test {
         vm.expectRevert(SaleIsOver.selector);
         sale.endSale();
     }
+
+    // function testFuzz_withdrawExoticERC20ByWrongCaller(uint256 amount) public {
+    //     // Deploy ERC20
+    //     address erc20 = address(new ERC20("Exotic", "EXOTIC"));
+
+    //     // Deposit
+    //     deal(erc20, address(sale), amount, true);
+
+    //     // Withdraw
+    //     sale.withdrawExoticERC20(address(this));
+    // }
 }
 
-/// @notice Make sure nft_user is the address of someone holding Buterin Cards and Mined JPEGs
 contract SaleTestTokens is SaleStructs, Test {
     event Transfer(
         address indexed from,
@@ -513,9 +523,7 @@ contract SaleTestTokens is SaleStructs, Test {
         ).balanceOf(nft_user);
         assertEq(
             newBalance,
-            oldBalance -
-                10 ** (stablecoin == 0 ? 6 : stablecoin == 1 ? 6 : 18) *
-                uint256(amountNoDecimals)
+            oldBalance - _addDecimals(stablecoin, amountNoDecimals)
         );
 
         vm.stopPrank();
@@ -592,9 +600,7 @@ contract SaleTestTokens is SaleStructs, Test {
         ).balanceOf(nft_user);
         assertEq(
             newBalance,
-            oldBalance -
-                10 ** (stablecoin == 0 ? 6 : stablecoin == 1 ? 6 : 18) *
-                uint256(MAX_CONTRIBUTIONS_NO_DECIMALS)
+            oldBalance - _addDecimals(stablecoin, MAX_CONTRIBUTIONS_NO_DECIMALS)
         );
 
         // Check sale actually ended
@@ -811,8 +817,8 @@ contract SaleTestTokens is SaleStructs, Test {
         assertEq(
             newBalance,
             oldBalance -
-                10 ** (stablecoin2 == 0 ? 6 : stablecoin2 == 1 ? 6 : 18) *
-                uint256(
+                _addDecimals(
+                    stablecoin2,
                     depositReduced
                         ? MAX_CONTRIBUTIONS_NO_DECIMALS - amountNoDecimals1
                         : amountNoDecimals2
@@ -1167,6 +1173,182 @@ contract SaleTestTokens is SaleStructs, Test {
         vm.prank(nft_user);
         vm.expectRevert(NoNfts.selector);
         sale.withdrawNfts();
+    }
+
+    function testFuzz_withdrawFundsWhileSaleIsLive(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock,
+        address to
+    ) public {
+        vm.assume(to != address(0));
+
+        // Deposit and lock NFTs
+        testFuzz_depositAndLockNfts(stablecoin, amountNoDecimals, nftsToLock);
+
+        // Withdraw
+        vm.expectRevert(SaleIsLive.selector);
+        sale.withdrawFunds(to);
+    }
+
+    function testFuzz_withdrawFundsByWrongCaller(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock,
+        address caller,
+        address to
+    ) public {
+        vm.assume(caller != address(this));
+        vm.assume(to != address(0));
+
+        // Deposit and lock NFTs
+        testFuzz_depositAndLockNftsEndsSale(
+            stablecoin,
+            amountNoDecimals,
+            nftsToLock
+        );
+
+        // Withdraw
+        vm.prank(caller);
+        vm.expectRevert();
+        sale.withdrawFunds(to);
+    }
+
+    function testFuzz_withdrawFundsTo0AddressFails(
+        uint256 stablecoin,
+        uint24 amountNoDecimals,
+        NftsToLock memory nftsToLock
+    ) public {
+        // Deposit and lock NFTs
+        testFuzz_depositAndLockNftsEndsSale(
+            stablecoin,
+            amountNoDecimals,
+            nftsToLock
+        );
+
+        // Withdraw
+        vm.expectRevert(NullAddress.selector);
+        sale.withdrawFunds(address(0));
+    }
+
+    function testFuzz_withdrawFunds(
+        uint256 stablecoinA,
+        uint24 amountNoDecimalsA,
+        NftsToLock memory nftsToLockA,
+        address user,
+        uint256 stablecoinB,
+        uint24 amountNoDecimalsB,
+        address to
+    ) public {
+        vm.assume(user != nft_user);
+        vm.assume(to != address(0));
+
+        stablecoinA = _bound(stablecoinA, 0, 2);
+        stablecoinB = _bound(stablecoinB, 0, 2);
+
+        amountNoDecimalsA = uint24(
+            _bound(amountNoDecimalsA, 1, MAX_CONTRIBUTIONS_NO_DECIMALS - 1)
+        );
+        amountNoDecimalsB = uint24(
+            _bound(
+                amountNoDecimalsB,
+                MAX_CONTRIBUTIONS_NO_DECIMALS - amountNoDecimalsA,
+                type(uint24).max
+            )
+        );
+
+        // NFT user deposits and lock NFTs
+        testFuzz_depositAndLockNfts(
+            stablecoinA,
+            amountNoDecimalsA,
+            nftsToLockA
+        );
+
+        // Deal stablecoin
+        deal(address(_USDT), user, uint256(amountNoDecimalsB) * 1e6, true);
+        deal(address(_USDC), user, uint256(amountNoDecimalsB) * 1e6, true);
+        deal(address(_DAI), user, uint256(amountNoDecimalsB) * 1e18, true);
+
+        // Approve sale contract to transfer stablecoin
+        vm.startPrank(user);
+        SafeERC20.forceApprove(
+            stablecoinB == 0 ? _USDT : stablecoinB == 1 ? _USDC : _DAI,
+            address(sale),
+            type(uint256).max
+        );
+
+        // User deposits and lock NFTs
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoinB),
+            amountNoDecimalsB,
+            new uint16[](0),
+            new uint8[](0)
+        );
+        vm.stopPrank();
+
+        // Withdraw
+        uint256 usdtBalance = _USDT.balanceOf(to);
+        uint256 usdcBalance = _USDC.balanceOf(to);
+        uint256 daiBalance = _DAI.balanceOf(to);
+        sale.withdrawFunds(to);
+
+        // Check balances
+        if (stablecoinA == stablecoinB) {
+            uint256 balanceOld = (
+                stablecoinA == 0 ? usdtBalance : stablecoinA == 1
+                    ? usdcBalance
+                    : daiBalance
+            );
+            IERC20 stablecoin = stablecoinA == 0 ? _USDT : stablecoinA == 1
+                ? _USDC
+                : _DAI;
+            assertEq(
+                stablecoin.balanceOf(to),
+                balanceOld +
+                    _addDecimals(stablecoinA, MAX_CONTRIBUTIONS_NO_DECIMALS)
+            );
+        } else {
+            {
+                uint256 balanceOldA = (
+                    stablecoinA == 0 ? usdtBalance : stablecoinA == 1
+                        ? usdcBalance
+                        : daiBalance
+                );
+                IERC20 stableA = stablecoinA == 0 ? _USDT : stablecoinA == 1
+                    ? _USDC
+                    : _DAI;
+                assertEq(
+                    stableA.balanceOf(to),
+                    balanceOldA + _addDecimals(stablecoinA, amountNoDecimalsA)
+                );
+            }
+            uint256 balanceOldB = (
+                stablecoinB == 0 ? usdtBalance : stablecoinB == 1
+                    ? usdcBalance
+                    : daiBalance
+            );
+            IERC20 stableB = stablecoinB == 0 ? _USDT : stablecoinB == 1
+                ? _USDC
+                : _DAI;
+            assertEq(
+                stableB.balanceOf(to),
+                balanceOldB +
+                    _addDecimals(
+                        stablecoinB,
+                        MAX_CONTRIBUTIONS_NO_DECIMALS - amountNoDecimalsA
+                    )
+            );
+        }
+    }
+
+    function _addDecimals(
+        uint256 stablecoin,
+        uint amountNoDecimals
+    ) private pure returns (uint256) {
+        if (stablecoin > 2) revert("Invalid stablecoin");
+        return
+            amountNoDecimals *
+            (stablecoin == 0 ? 1e6 : stablecoin == 1 ? 1e6 : 1e18);
     }
 
     ////////////////////////////////////////////////////////////////////////////////

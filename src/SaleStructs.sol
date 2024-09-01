@@ -16,6 +16,7 @@ contract SaleStructs {
 
     error WrongStablecoin();
     error NullDeposit();
+    error NullAddress();
     error SaleIsOver();
     error TooManyNfts();
     error NftsLocked();
