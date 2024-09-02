@@ -9,7 +9,9 @@ import {SaleStructs} from "./SaleStructs.sol";
 
 /** @notice Sale contract for SIR
     @notice Accepts USDT, USDC & DAI
-    @notice Users can lock up to 5 Buterin Cards or Mined JPEGs
+    @notice Users can lock up to 5 Buterin Cards or Mined JPEGs to boost their token allocations
+    @notice Users can withdraw their deposits before 24 hours have passed
+    @notice Users can withdraw their NFTs 1 year after the sale ended
  */
 contract Sale is SaleStructs, Ownable {
     address private constant _USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
@@ -35,7 +37,7 @@ contract Sale is SaleStructs, Ownable {
 
     constructor() Ownable(msg.sender) {}
 
-    /** @notice Deposits USDT, USDC or DAI and locks up to 5 Buterin Cards or Mined JPEGs
+    /** @notice Deposits USDT, USDC or DAI and, optionally, locks up to 5 Buterin Cards or Mined JPEGs
         @notice Users can deposit multiple times
         @notice Once one stablecoin is deposited, the user cannot deposit another stablecoin
         @param stablecoin The stablecoin to deposit
@@ -296,6 +298,9 @@ contract Sale is SaleStructs, Ownable {
         return _state;
     }
 
+    /** @notice Returns the contribution of a user including stablecoin of choice, (un)withdrawable amounts, and locked NFTs
+        @param contributor The address of the contributor
+     */
     function contributions(
         address contributor
     ) public view returns (Contribution memory) {

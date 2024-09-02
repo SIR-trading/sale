@@ -83,16 +83,43 @@ contract SaleTest is SaleStructs, Test {
         sale.endSale();
     }
 
-    // function testFuzz_withdrawExoticERC20ByWrongCaller(uint256 amount) public {
-    //     // Deploy ERC20
-    //     address erc20 = address(new ERC20("Exotic", "EXOTIC"));
+    function testFuzz_withdrawExoticERC20ByWrongCaller(
+        address caller,
+        uint256 amount,
+        address to
+    ) public {
+        vm.assume(caller != address(this));
 
-    //     // Deposit
-    //     deal(erc20, address(sale), amount, true);
+        // Deploy ERC20
+        address erc20 = address(new MockToken(address(sale), amount));
 
-    //     // Withdraw
-    //     sale.withdrawExoticERC20(address(this));
-    // }
+        // Withdraw
+        vm.prank(caller);
+        vm.expectRevert();
+        sale.withdrawExoticERC20(erc20, to);
+    }
+
+    function testFuzz_withdrawExoticERC20ToNullAddress(uint256 amount) public {
+        // Deploy ERC20
+        address erc20 = address(new MockToken(address(sale), amount));
+
+        // Withdraw
+        vm.expectRevert(NullAddress.selector);
+        sale.withdrawExoticERC20(erc20, address(0));
+    }
+
+    function testFuzz_withdrawExoticERC20(uint256 amount, address to) public {
+        to = address(uint160(_bound(uint160(to), 1, type(uint160).max))); // Ensure to is not the zero address
+
+        // Deploy ERC20
+        MockToken erc20 = new MockToken(address(sale), amount);
+
+        // Withdraw
+        sale.withdrawExoticERC20(address(erc20), to);
+
+        // Check balance
+        assertEq(erc20.balanceOf(to), amount);
+    }
 }
 
 contract SaleTestTokens is SaleStructs, Test {
@@ -1181,7 +1208,7 @@ contract SaleTestTokens is SaleStructs, Test {
         NftsToLock memory nftsToLock,
         address to
     ) public {
-        vm.assume(to != address(0));
+        to = address(uint160(_bound(uint160(to), 1, type(uint160).max))); // Prevents address 0 // Prevents address 0
 
         // Deposit and lock NFTs
         testFuzz_depositAndLockNfts(stablecoin, amountNoDecimals, nftsToLock);
@@ -1199,7 +1226,7 @@ contract SaleTestTokens is SaleStructs, Test {
         address to
     ) public {
         vm.assume(caller != address(this));
-        vm.assume(to != address(0));
+        to = address(uint160(_bound(uint160(to), 1, type(uint160).max))); // Prevents address 0 // Prevents address 0
 
         // Deposit and lock NFTs
         testFuzz_depositAndLockNftsEndsSale(
@@ -1240,8 +1267,9 @@ contract SaleTestTokens is SaleStructs, Test {
         uint24 amountNoDecimalsB,
         address to
     ) public {
-        vm.assume(user != nft_user);
-        vm.assume(to != address(0));
+        to = address(uint160(_bound(uint160(to), 1, type(uint160).max))); // Prevents address 0 // Prevents address 0
+        user = address(uint160(_bound(uint160(user), 1, type(uint160).max))); // Prevents address 0
+        vm.assume(user != to);
 
         stablecoinA = _bound(stablecoinA, 0, 2);
         stablecoinB = _bound(stablecoinB, 0, 2);
@@ -1341,6 +1369,141 @@ contract SaleTestTokens is SaleStructs, Test {
         }
     }
 
+    function testFuzz_unlockAllNftsWrongCaller(
+        NftsToLock memory nftsToLock,
+        address user
+    ) public {
+        vm.assume(user != address(this));
+
+        // Ensure locking of NFTs doesn't fail because they more than 5
+        nftsToLock.numButerinCards = uint16(
+            _bound(nftsToLock.numButerinCards, 0, 5)
+        );
+        nftsToLock.numMinedJpegs = uint8(
+            _bound(nftsToLock.numMinedJpegs, 0, 5 - nftsToLock.numButerinCards)
+        );
+        vm.assume(nftsToLock.numButerinCards + nftsToLock.numMinedJpegs > 0);
+
+        NftsToLock[5] memory nftsToLock_;
+        nftsToLock_[0] = nftsToLock;
+        testFuzz_withdrawNftsWhileSaleIsLive(nftsToLock_);
+
+        // Unlock all NFTs
+        vm.prank(user);
+        vm.expectRevert();
+        sale.unlockAllNfts();
+    }
+
+    function testFuzz_unlockAllNftsDuringSale(
+        NftsToLock memory nftsToLock,
+        uint256 stablecoin,
+        uint24 amountNoDecimals
+    ) public {
+        // Ensure locking of NFTs doesn't fail because they more than 5
+        nftsToLock.numButerinCards = uint16(
+            _bound(nftsToLock.numButerinCards, 0, 5)
+        );
+        nftsToLock.numMinedJpegs = uint8(
+            _bound(nftsToLock.numMinedJpegs, 0, 5 - nftsToLock.numButerinCards)
+        );
+        vm.assume(nftsToLock.numButerinCards + nftsToLock.numMinedJpegs > 0);
+
+        // Get token ids of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock);
+
+        NftsToLock[5] memory nftsToLock_;
+        nftsToLock_[0] = nftsToLock;
+        testFuzz_withdrawNftsWhileSaleIsLive(nftsToLock_);
+
+        // Unlock all NFTs
+        sale.unlockAllNfts();
+
+        // Withdraw NFTs successfully
+        vm.prank(nft_user);
+        for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            vm.expectEmit();
+            emit ButerinCardUnlocked(buterinCardIds[i]);
+        }
+        for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            vm.expectEmit();
+            emit MinedJpegUnlocked(minedJpegIds[i]);
+        }
+        sale.withdrawNfts();
+
+        // Check sale actually ended
+        stablecoin = _bound(stablecoin, 0, 2);
+        amountNoDecimals = uint24(
+            _bound(amountNoDecimals, 1, type(uint24).max)
+        );
+        vm.expectRevert(SaleIsOver.selector);
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin),
+            amountNoDecimals,
+            new uint16[](0),
+            new uint8[](0)
+        );
+    }
+
+    function testFuzz_unlockAllNftsAfterSale(
+        NftsToLock memory nftsToLock,
+        uint256 stablecoin,
+        uint24 amountNoDecimals
+    ) public {
+        // Ensure locking of NFTs doesn't fail because they more than 5
+        nftsToLock.numButerinCards = uint16(
+            _bound(nftsToLock.numButerinCards, 0, 5)
+        );
+        nftsToLock.numMinedJpegs = uint8(
+            _bound(nftsToLock.numMinedJpegs, 0, 5 - nftsToLock.numButerinCards)
+        );
+        vm.assume(nftsToLock.numButerinCards + nftsToLock.numMinedJpegs > 0);
+
+        // Get token ids of NFTs to be locked
+        (
+            uint16[] memory buterinCardIds,
+            uint8[] memory minedJpegIds
+        ) = _getTokenIds(nftsToLock);
+
+        NftsToLock[5] memory nftsToLock_;
+        nftsToLock_[0] = nftsToLock;
+        testFuzz_withdrawNftsAfterInsufficientTime(nftsToLock_);
+
+        // Unlock all NFTs
+        sale.unlockAllNfts();
+
+        // Withdraw NFTs successfully
+        vm.prank(nft_user);
+        for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            vm.expectEmit();
+            emit ButerinCardUnlocked(buterinCardIds[i]);
+        }
+        for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            vm.expectEmit();
+            emit MinedJpegUnlocked(minedJpegIds[i]);
+        }
+        sale.withdrawNfts();
+
+        // Check sale actually ended
+        stablecoin = _bound(stablecoin, 0, 2);
+        amountNoDecimals = uint24(
+            _bound(amountNoDecimals, 1, type(uint24).max)
+        );
+        vm.expectRevert(SaleIsOver.selector);
+        sale.depositAndLockNfts(
+            Stablecoin(stablecoin),
+            amountNoDecimals,
+            new uint16[](0),
+            new uint8[](0)
+        );
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /////////////////////// P R I V A T E  F U N C T I O N S //////////////////////
+    //////////////////////////////////////////////////////////////////////////////
+
     function _addDecimals(
         uint256 stablecoin,
         uint amountNoDecimals
@@ -1350,10 +1513,6 @@ contract SaleTestTokens is SaleStructs, Test {
             amountNoDecimals *
             (stablecoin == 0 ? 1e6 : stablecoin == 1 ? 1e6 : 1e18);
     }
-
-    ////////////////////////////////////////////////////////////////////////////////
-    /////////////////////// P R I V A T E  F U N C T I O N S //////////////////////
-    //////////////////////////////////////////////////////////////////////////////
 
     function _checkNftsAreWithdrawn(
         uint16[] memory buterinCardIds,
@@ -1436,5 +1595,11 @@ contract SaleTestTokens is SaleStructs, Test {
         deal(address(_USDT), nft_user, uint256(amountNoDecimals) * 1e6, true);
         deal(address(_USDC), nft_user, uint256(amountNoDecimals) * 1e6, true);
         deal(address(_DAI), nft_user, uint256(amountNoDecimals) * 1e18, true);
+    }
+}
+
+contract MockToken is ERC20 {
+    constructor(address to, uint256 amount) ERC20("Mock Token", "MOCK") {
+        _mint(to, amount);
     }
 }
