@@ -51,67 +51,70 @@ contract Sale is SaleStructs, Ownable {
         uint16[] calldata buterinCardIds,
         uint8[] calldata minedJpegIds
     ) external {
-        if (amountNoDecimals == 0) revert NullDeposit();
+        // maxAmountNoDecimals ensures that the total contributions do not exceed MAX_CONTRIBUTIONS_NO_DECIMALS
+        unchecked {
+            if (amountNoDecimals == 0) revert NullDeposit();
 
-        // Revert if sale is over
-        SaleState memory state_ = _state;
-        if (state_.timeSaleEnded > 0) revert SaleIsOver();
+            // Revert if sale is over
+            SaleState memory state_ = _state;
+            if (state_.timeSaleEnded > 0) revert SaleIsOver();
 
-        // Limit the contribution if it exceeds the maximum
-        uint24 maxAmountNoDecimals = MAX_CONTRIBUTIONS_NO_DECIMALS -
-            state_.totalContributionsNoDecimals;
-        if (amountNoDecimals >= maxAmountNoDecimals) {
-            if (amountNoDecimals > maxAmountNoDecimals) {
-                // Truncate the contribution
-                amountNoDecimals = maxAmountNoDecimals;
+            // Limit the contribution if it exceeds the maximum
+            uint24 maxAmountNoDecimals = MAX_CONTRIBUTIONS_NO_DECIMALS -
+                state_.totalContributionsNoDecimals;
+            if (amountNoDecimals >= maxAmountNoDecimals) {
+                if (amountNoDecimals > maxAmountNoDecimals) {
+                    // Truncate the contribution
+                    amountNoDecimals = maxAmountNoDecimals;
 
-                // Emit event
-                emit DepositWasReduced();
+                    // Emit event
+                    emit DepositWasReduced();
+                }
+
+                // End sale
+                _endSale(state_);
             }
 
-            // End sale
-            _endSale(state_);
+            // Update _state
+            state_.totalContributionsNoDecimals += amountNoDecimals;
+
+            // Update contribution
+            Contribution memory contribution = contributions(msg.sender);
+            if (
+                contribution.amountFinalNoDecimals +
+                    contribution.amountWithdrawableNoDecimals ==
+                0
+            ) {
+                // 1st contribution
+                contribution.stablecoin = stablecoin;
+            } else if (stablecoin != contribution.stablecoin) {
+                revert WrongStablecoin();
+            }
+            contribution.amountWithdrawableNoDecimals += amountNoDecimals;
+            contribution.timeLastContribution = uint40(block.timestamp);
+
+            // Lock NFTs
+            _lockNfts(buterinCardIds, minedJpegIds, contribution);
+
+            // Save contribution and _state
+            _state = state_;
+            _contributions[msg.sender] = contribution;
+
+            // Emit event
+            emit Deposit(stablecoin, amountNoDecimals);
+
+            // Transfer tokens to the contract
+            TransferHelper.safeTransferFrom(
+                stablecoin == Stablecoin.USDT
+                    ? _USDT
+                    : stablecoin == Stablecoin.USDC
+                    ? _USDC
+                    : _DAI,
+                msg.sender,
+                address(this),
+                _addDecimals(stablecoin, amountNoDecimals)
+            );
         }
-
-        // Update _state
-        state_.totalContributionsNoDecimals += amountNoDecimals;
-
-        // Update contribution
-        Contribution memory contribution = contributions(msg.sender);
-        if (
-            contribution.amountFinalNoDecimals +
-                contribution.amountWithdrawableNoDecimals ==
-            0
-        ) {
-            // 1st contribution
-            contribution.stablecoin = stablecoin;
-        } else if (stablecoin != contribution.stablecoin) {
-            revert WrongStablecoin();
-        }
-        contribution.amountWithdrawableNoDecimals += amountNoDecimals;
-        contribution.timeLastContribution = uint40(block.timestamp);
-
-        // Lock NFTs
-        _lockNfts(buterinCardIds, minedJpegIds, contribution);
-
-        // Save contribution and _state
-        _state = state_;
-        _contributions[msg.sender] = contribution;
-
-        // Emit event
-        emit Deposit(stablecoin, amountNoDecimals);
-
-        // Transfer tokens to the contract
-        TransferHelper.safeTransferFrom(
-            stablecoin == Stablecoin.USDT
-                ? _USDT
-                : stablecoin == Stablecoin.USDC
-                ? _USDC
-                : _DAI,
-            msg.sender,
-            address(this),
-            _addDecimals(stablecoin, amountNoDecimals)
-        );
     }
 
     /** @notice Contributors can withdraw their deposits before 24 hours have passed
@@ -133,7 +136,10 @@ contract Sale is SaleStructs, Ownable {
         _contributions[msg.sender] = contribution;
 
         // Update _state
-        state_.totalContributionsNoDecimals -= amountWithdrawableNoDecimals;
+        unchecked {
+            // amountWithdrawableNoDecimals is always less than or equal to totalContributionsNoDecimals
+            state_.totalContributionsNoDecimals -= amountWithdrawableNoDecimals;
+        }
         _state = state_;
 
         // Emit event
@@ -175,48 +181,51 @@ contract Sale is SaleStructs, Ownable {
         @notice Users can withdraw their NFTs 1 year after the sale ended
      */
     function withdrawNfts() external {
-        // Revert if it is less than 1 year since the sale ended
-        if (
-            _state.timeSaleEnded == 0 ||
-            block.timestamp < _state.timeSaleEnded + 365 days
-        ) revert NftsLocked();
+        // i++ will never overflow
+        unchecked {
+            // Revert if it is less than 1 year since the sale ended
+            uint40 timeSaleEnded = _state.timeSaleEnded;
+            if (
+                timeSaleEnded == 0 || block.timestamp < timeSaleEnded + 365 days
+            ) revert NftsLocked();
 
-        // Withdraw NFTs
-        Contribution memory contribution = contributions(msg.sender);
-        LockedButerinCards memory lockedButerinCards = contribution
-            .lockedButerinCards;
-        LockedMinedJpegs memory lockedMinedJpegs = contribution
-            .lockedMinedJpegs;
+            // Withdraw NFTs
+            Contribution memory contribution = contributions(msg.sender);
+            LockedButerinCards memory lockedButerinCards = contribution
+                .lockedButerinCards;
+            LockedMinedJpegs memory lockedMinedJpegs = contribution
+                .lockedMinedJpegs;
 
-        if (lockedButerinCards.number == 0 && lockedMinedJpegs.number == 0)
-            revert NoNfts();
+            if (lockedButerinCards.number == 0 && lockedMinedJpegs.number == 0)
+                revert NoNfts();
 
-        // Transfer Buterin Cards
-        for (uint256 i = 0; i < lockedButerinCards.number; i++) {
-            _BUTERIN_CARDS.transferFrom(
-                address(this),
-                msg.sender,
-                lockedButerinCards.ids[i]
-            );
-            emit ButerinCardUnlocked(lockedButerinCards.ids[i]);
+            // Transfer Buterin Cards
+            for (uint256 i = 0; i < lockedButerinCards.number; i++) {
+                _BUTERIN_CARDS.transferFrom(
+                    address(this),
+                    msg.sender,
+                    lockedButerinCards.ids[i]
+                );
+                emit ButerinCardUnlocked(lockedButerinCards.ids[i]);
+            }
+
+            // Transfer Mined JPEGs
+            for (uint256 i = 0; i < lockedMinedJpegs.number; i++) {
+                _MINED_JPEG.transferFrom(
+                    address(this),
+                    msg.sender,
+                    lockedMinedJpegs.ids[i]
+                );
+                emit MinedJpegUnlocked(lockedMinedJpegs.ids[i]);
+            }
+
+            // Update contribution
+            contribution.lockedButerinCards.number = 0;
+            contribution.lockedMinedJpegs.number = 0;
+
+            // Save contribution
+            _contributions[msg.sender] = contribution;
         }
-
-        // Transfer Mined JPEGs
-        for (uint256 i = 0; i < lockedMinedJpegs.number; i++) {
-            _MINED_JPEG.transferFrom(
-                address(this),
-                msg.sender,
-                lockedMinedJpegs.ids[i]
-            );
-            emit MinedJpegUnlocked(lockedMinedJpegs.ids[i]);
-        }
-
-        // Update contribution
-        contribution.lockedButerinCards.number = 0;
-        contribution.lockedMinedJpegs.number = 0;
-
-        // Save contribution
-        _contributions[msg.sender] = contribution;
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -304,14 +313,18 @@ contract Sale is SaleStructs, Ownable {
     function contributions(
         address contributor
     ) public view returns (Contribution memory) {
-        Contribution memory contribution = _contributions[contributor];
-        if (block.timestamp >= contribution.timeLastContribution + 24 hours) {
-            // If 24 hours have passed since the last deposit, the user cannot withdraw the previous deposit
-            contribution.amountFinalNoDecimals += contribution
-                .amountWithdrawableNoDecimals;
-            contribution.amountWithdrawableNoDecimals = 0;
+        unchecked {
+            Contribution memory contribution = _contributions[contributor];
+            if (
+                block.timestamp >= contribution.timeLastContribution + 24 hours
+            ) {
+                // If 24 hours have passed since the last deposit, the user cannot withdraw the previous deposit
+                contribution.amountFinalNoDecimals += contribution
+                    .amountWithdrawableNoDecimals;
+                contribution.amountWithdrawableNoDecimals = 0;
+            }
+            return contribution;
         }
-        return contribution;
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -340,37 +353,40 @@ contract Sale is SaleStructs, Ownable {
             5
         ) revert TooManyNfts();
 
-        // Update contribution
-        for (uint256 i = 0; i < buterinCardIds.length; i++) {
-            contribution.lockedButerinCards.ids[
-                contribution.lockedButerinCards.number++
-            ] = buterinCardIds[i];
-            emit ButerinCardLocked(buterinCardIds[i]);
-        }
+        // i++ will never overflow
+        unchecked {
+            // Update contribution
+            for (uint256 i = 0; i < buterinCardIds.length; i++) {
+                contribution.lockedButerinCards.ids[
+                    contribution.lockedButerinCards.number++
+                ] = buterinCardIds[i];
+                emit ButerinCardLocked(buterinCardIds[i]);
+            }
 
-        for (uint256 i = 0; i < minedJpegIds.length; i++) {
-            contribution.lockedMinedJpegs.ids[
-                contribution.lockedMinedJpegs.number++
-            ] = minedJpegIds[i];
-            emit MinedJpegLocked(minedJpegIds[i]);
-        }
+            for (uint256 i = 0; i < minedJpegIds.length; i++) {
+                contribution.lockedMinedJpegs.ids[
+                    contribution.lockedMinedJpegs.number++
+                ] = minedJpegIds[i];
+                emit MinedJpegLocked(minedJpegIds[i]);
+            }
 
-        // Transfer Buterin Cards
-        for (uint256 i = 0; i < buterinCardIds.length; i++) {
-            _BUTERIN_CARDS.transferFrom(
-                msg.sender,
-                address(this),
-                buterinCardIds[i]
-            );
-        }
+            // Transfer Buterin Cards
+            for (uint256 i = 0; i < buterinCardIds.length; i++) {
+                _BUTERIN_CARDS.transferFrom(
+                    msg.sender,
+                    address(this),
+                    buterinCardIds[i]
+                );
+            }
 
-        // Transfer Mined JPEGs
-        for (uint256 i = 0; i < minedJpegIds.length; i++) {
-            _MINED_JPEG.transferFrom(
-                msg.sender,
-                address(this),
-                minedJpegIds[i]
-            );
+            // Transfer Mined JPEGs
+            for (uint256 i = 0; i < minedJpegIds.length; i++) {
+                _MINED_JPEG.transferFrom(
+                    msg.sender,
+                    address(this),
+                    minedJpegIds[i]
+                );
+            }
         }
     }
 
@@ -378,12 +394,14 @@ contract Sale is SaleStructs, Ownable {
         Stablecoin stablecoin,
         uint256 amountNoDecimals
     ) private pure returns (uint256) {
-        if (stablecoin == Stablecoin.USDT) {
-            return amountNoDecimals * 10 ** _USDT_DECIMALS;
+        unchecked {
+            if (stablecoin == Stablecoin.USDT) {
+                return amountNoDecimals * 10 ** _USDT_DECIMALS;
+            }
+            if (stablecoin == Stablecoin.USDC) {
+                return amountNoDecimals * 10 ** _USDC_DECIMALS;
+            }
+            return amountNoDecimals * 10 ** _DAI_DECIMALS;
         }
-        if (stablecoin == Stablecoin.USDC) {
-            return amountNoDecimals * 10 ** _USDC_DECIMALS;
-        }
-        return amountNoDecimals * 10 ** _DAI_DECIMALS;
     }
 }

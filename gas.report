@@ -1,0 +1,24 @@
+|-------------------------------|-----------------|--------|--------|--------|---------|
+| Deployment Cost               | Deployment Size |        |        |        |         |
+| 1801844                       | 8140            |        |        |        |         |
+| Function Name                 | min             | avg    | median | max    | # calls |
+| MAX_CONTRIBUTIONS_NO_DECIMALS | 271             | 271    | 271    | 271    | 1       |
+| contributions                 | 6223            | 7327   | 6283   | 16283  | 12545   |
+| depositAndLockNfts            | 22760           | 221808 | 144103 | 545177 | 7168    |
+| endSale                       | 23479           | 42863  | 46928  | 46928  | 2816    |
+| lockNfts                      | 24590           | 93156  | 68229  | 450578 | 12029   |
+| owner                         | 2323            | 2323   | 2323   | 2323   | 1       |
+| state                         | 497             | 686    | 497    | 2497   | 13825   |
+| unlockAllNfts                 | 23521           | 32529  | 28484  | 45584  | 768     |
+| withdraw                      | 23520           | 66154  | 89667  | 110390 | 769     |
+| withdrawExoticERC20           | 24225           | 34134  | 24453  | 54088  | 768     |
+| withdrawFunds                 | 23754           | 46897  | 24978  | 120732 | 1024    |
+| withdrawNfts                  | 23498           | 84632  | 30869  | 310210 | 3584    |
+
+
+| test/Sale.t.sol:MockToken contract |                 |      |        |      |         |
+|------------------------------------|-----------------|------|--------|------|---------|
+| Deployment Cost                    | Deployment Size |      |        |      |         |
+| 554508                             | 2876            |      |        |      |         |
+| Function Name                      | min             | avg  | median | max  | # calls |
+| balanceOf                          | 562             | 1562 | 1562   | 2562 | 512     |
