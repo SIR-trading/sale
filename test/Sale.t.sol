@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/Sale.sol";
-import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
 import {ERC20} from "openzeppelin/token/ERC20/ERC20.sol";
 import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {IERC721Enumerable} from "openzeppelin/token/ERC721/extensions/IERC721Enumerable.sol";
@@ -129,17 +128,21 @@ contract SaleTestTokens is SaleStructs, Test {
         uint256 indexed tokenId
     );
 
-    IERC20 private constant _USDT =
-        IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);
-    IERC20 private constant _USDC =
-        IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
-    IERC20 private constant _DAI =
-        IERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
+    ERC20 private constant _USDT =
+        ERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7);
+    ERC20 private constant _USDC =
+        ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+    ERC20 private constant _DAI =
+        ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F);
 
     IERC721Enumerable private constant _BUTERIN_CARDS =
         IERC721Enumerable(0x5726C14663A1EaD4A7D320E8A653c9710b2A2E89);
     IERC721Enumerable private constant _MINED_JPEG =
         IERC721Enumerable(0x7cd51FA7E155805C34F333ba493608742A67Da8e);
+
+    uint8 private _USDT_DECIMALS;
+    uint8 private _USDC_DECIMALS;
+    uint8 private _DAI_DECIMALS;
 
     Sale sale;
 
@@ -167,6 +170,11 @@ contract SaleTestTokens is SaleStructs, Test {
                 _MINED_JPEG.balanceOf(nft_user) >
                 5
         );
+
+        // Get decimals
+        _USDT_DECIMALS = _USDT.decimals();
+        _USDC_DECIMALS = _USDC.decimals();
+        _DAI_DECIMALS = _DAI.decimals();
     }
 
     struct NftsToLock {
@@ -953,7 +961,11 @@ contract SaleTestTokens is SaleStructs, Test {
         assertEq(
             newBalance,
             oldBalance +
-                10 ** (stablecoin == 0 ? 6 : stablecoin == 1 ? 6 : 18) *
+                (
+                    stablecoin == 0 ? 10 ** _USDT_DECIMALS : stablecoin == 1
+                        ? 10 ** _USDC_DECIMALS
+                        : 10 ** _DAI_DECIMALS
+                ) *
                 uint256(cumulativeWithdrawableAmountNoDecimals)
         );
     }
@@ -1293,9 +1305,24 @@ contract SaleTestTokens is SaleStructs, Test {
         );
 
         // Deal stablecoin
-        deal(address(_USDT), user, uint256(amountNoDecimalsB) * 1e6, true);
-        deal(address(_USDC), user, uint256(amountNoDecimalsB) * 1e6, true);
-        deal(address(_DAI), user, uint256(amountNoDecimalsB) * 1e18, true);
+        deal(
+            address(_USDT),
+            user,
+            uint256(amountNoDecimalsB) * 10 ** _USDT_DECIMALS,
+            true
+        );
+        deal(
+            address(_USDC),
+            user,
+            uint256(amountNoDecimalsB) * 10 ** _USDC_DECIMALS,
+            true
+        );
+        deal(
+            address(_DAI),
+            user,
+            uint256(amountNoDecimalsB) * 10 ** _DAI_DECIMALS,
+            true
+        );
 
         // Approve sale contract to transfer stablecoin
         vm.startPrank(user);
@@ -1327,7 +1354,7 @@ contract SaleTestTokens is SaleStructs, Test {
                     ? usdcBalance
                     : daiBalance
             );
-            IERC20 stablecoin = stablecoinA == 0 ? _USDT : stablecoinA == 1
+            ERC20 stablecoin = stablecoinA == 0 ? _USDT : stablecoinA == 1
                 ? _USDC
                 : _DAI;
             assertEq(
@@ -1342,7 +1369,7 @@ contract SaleTestTokens is SaleStructs, Test {
                         ? usdcBalance
                         : daiBalance
                 );
-                IERC20 stableA = stablecoinA == 0 ? _USDT : stablecoinA == 1
+                ERC20 stableA = stablecoinA == 0 ? _USDT : stablecoinA == 1
                     ? _USDC
                     : _DAI;
                 assertEq(
@@ -1355,7 +1382,7 @@ contract SaleTestTokens is SaleStructs, Test {
                     ? usdcBalance
                     : daiBalance
             );
-            IERC20 stableB = stablecoinB == 0 ? _USDT : stablecoinB == 1
+            ERC20 stableB = stablecoinB == 0 ? _USDT : stablecoinB == 1
                 ? _USDC
                 : _DAI;
             assertEq(
@@ -1507,11 +1534,15 @@ contract SaleTestTokens is SaleStructs, Test {
     function _addDecimals(
         uint256 stablecoin,
         uint amountNoDecimals
-    ) private pure returns (uint256) {
+    ) private view returns (uint256) {
         if (stablecoin > 2) revert("Invalid stablecoin");
         return
             amountNoDecimals *
-            (stablecoin == 0 ? 1e6 : stablecoin == 1 ? 1e6 : 1e18);
+            (
+                stablecoin == 0 ? 10 ** _USDT_DECIMALS : stablecoin == 1
+                    ? 10 ** _USDC_DECIMALS
+                    : 10 ** _DAI_DECIMALS
+            );
     }
 
     function _checkNftsAreWithdrawn(
@@ -1592,9 +1623,24 @@ contract SaleTestTokens is SaleStructs, Test {
     }
 
     function _dealStablecoins(uint24 amountNoDecimals) private {
-        deal(address(_USDT), nft_user, uint256(amountNoDecimals) * 1e6, true);
-        deal(address(_USDC), nft_user, uint256(amountNoDecimals) * 1e6, true);
-        deal(address(_DAI), nft_user, uint256(amountNoDecimals) * 1e18, true);
+        deal(
+            address(_USDT),
+            nft_user,
+            uint256(amountNoDecimals) * 10 ** _USDT_DECIMALS,
+            true
+        );
+        deal(
+            address(_USDC),
+            nft_user,
+            uint256(amountNoDecimals) * 10 ** _USDC_DECIMALS,
+            true
+        );
+        deal(
+            address(_DAI),
+            nft_user,
+            uint256(amountNoDecimals) * 10 ** _DAI_DECIMALS,
+            true
+        );
     }
 }
 

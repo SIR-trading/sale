@@ -200,7 +200,7 @@ contract Sale is SaleStructs, Ownable {
                 revert NoNfts();
 
             // Transfer Buterin Cards
-            for (uint256 i = 0; i < lockedButerinCards.number; i++) {
+            for (uint256 i = 0; i < lockedButerinCards.number; ++i) {
                 _BUTERIN_CARDS.transferFrom(
                     address(this),
                     msg.sender,
@@ -210,7 +210,7 @@ contract Sale is SaleStructs, Ownable {
             }
 
             // Transfer Mined JPEGs
-            for (uint256 i = 0; i < lockedMinedJpegs.number; i++) {
+            for (uint256 i = 0; i < lockedMinedJpegs.number; ++i) {
                 _MINED_JPEG.transferFrom(
                     address(this),
                     msg.sender,
@@ -353,17 +353,17 @@ contract Sale is SaleStructs, Ownable {
             5
         ) revert TooManyNfts();
 
-        // i++ will never overflow
+        // ++i will never overflow
         unchecked {
             // Update contribution
-            for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            for (uint256 i = 0; i < buterinCardIds.length; ++i) {
                 contribution.lockedButerinCards.ids[
                     contribution.lockedButerinCards.number++
                 ] = buterinCardIds[i];
                 emit ButerinCardLocked(buterinCardIds[i]);
             }
 
-            for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            for (uint256 i = 0; i < minedJpegIds.length; ++i) {
                 contribution.lockedMinedJpegs.ids[
                     contribution.lockedMinedJpegs.number++
                 ] = minedJpegIds[i];
@@ -371,7 +371,7 @@ contract Sale is SaleStructs, Ownable {
             }
 
             // Transfer Buterin Cards
-            for (uint256 i = 0; i < buterinCardIds.length; i++) {
+            for (uint256 i = 0; i < buterinCardIds.length; ++i) {
                 _BUTERIN_CARDS.transferFrom(
                     msg.sender,
                     address(this),
@@ -380,7 +380,7 @@ contract Sale is SaleStructs, Ownable {
             }
 
             // Transfer Mined JPEGs
-            for (uint256 i = 0; i < minedJpegIds.length; i++) {
+            for (uint256 i = 0; i < minedJpegIds.length; ++i) {
                 _MINED_JPEG.transferFrom(
                     msg.sender,
                     address(this),
