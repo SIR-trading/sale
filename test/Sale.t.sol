@@ -107,11 +107,26 @@ contract SaleTest is SaleStructs, Test {
         sale.withdrawExoticERC20(erc20, address(0));
     }
 
+    function testFuzz_withdrawExoticERC20WhenSaleIsLive(
+        uint256 amount,
+        address to
+    ) public {
+        // Deploy ERC20
+        address erc20 = address(new MockToken(address(sale), amount));
+
+        // Withdraw
+        vm.expectRevert(SaleIsLive.selector);
+        sale.withdrawExoticERC20(erc20, to);
+    }
+
     function testFuzz_withdrawExoticERC20(uint256 amount, address to) public {
         to = address(uint160(_bound(uint160(to), 1, type(uint160).max))); // Ensure to is not the zero address
 
         // Deploy ERC20
         MockToken erc20 = new MockToken(address(sale), amount);
+
+        // End sale
+        sale.endSale();
 
         // Withdraw
         sale.withdrawExoticERC20(address(erc20), to);

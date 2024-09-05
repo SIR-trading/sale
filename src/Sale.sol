@@ -284,6 +284,10 @@ contract Sale is SaleStructs, Ownable {
     function withdrawExoticERC20(address token, address to) external onlyOwner {
         if (to == address(0)) revert NullAddress();
 
+        // Revert if sale is live
+        SaleState memory state_ = _state;
+        if (state_.timeSaleEnded == 0) revert SaleIsLive();
+
         TransferHelper.safeTransfer(
             token,
             to,
