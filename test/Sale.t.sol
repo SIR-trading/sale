@@ -84,8 +84,7 @@ contract SaleTest is SaleStructs, Test {
 
     function testFuzz_withdrawExoticERC20ByWrongCaller(
         address caller,
-        uint256 amount,
-        address to
+        uint256 amount
     ) public {
         vm.assume(caller != address(this));
 
@@ -95,33 +94,19 @@ contract SaleTest is SaleStructs, Test {
         // Withdraw
         vm.prank(caller);
         vm.expectRevert();
-        sale.withdrawExoticERC20(erc20, to);
+        sale.withdrawExoticERC20(erc20);
     }
 
-    function testFuzz_withdrawExoticERC20ToNullAddress(uint256 amount) public {
-        // Deploy ERC20
-        address erc20 = address(new MockToken(address(sale), amount));
-
-        // Withdraw
-        vm.expectRevert(NullAddress.selector);
-        sale.withdrawExoticERC20(erc20, address(0));
-    }
-
-    function testFuzz_withdrawExoticERC20WhenSaleIsLive(
-        uint256 amount,
-        address to
-    ) public {
+    function testFuzz_withdrawExoticERC20WhenSaleIsLive(uint256 amount) public {
         // Deploy ERC20
         address erc20 = address(new MockToken(address(sale), amount));
 
         // Withdraw
         vm.expectRevert(SaleIsLive.selector);
-        sale.withdrawExoticERC20(erc20, to);
+        sale.withdrawExoticERC20(erc20);
     }
 
-    function testFuzz_withdrawExoticERC20(uint256 amount, address to) public {
-        to = address(uint160(_bound(uint160(to), 1, type(uint160).max))); // Ensure to is not the zero address
-
+    function testFuzz_withdrawExoticERC20(uint256 amount) public {
         // Deploy ERC20
         MockToken erc20 = new MockToken(address(sale), amount);
 
@@ -129,10 +114,10 @@ contract SaleTest is SaleStructs, Test {
         sale.endSale();
 
         // Withdraw
-        sale.withdrawExoticERC20(address(erc20), to);
+        sale.withdrawExoticERC20(address(erc20));
 
         // Check balance
-        assertEq(erc20.balanceOf(to), amount);
+        assertEq(erc20.balanceOf(address(this)), amount);
     }
 }
 
@@ -1232,28 +1217,23 @@ contract SaleTestTokens is SaleStructs, Test {
     function testFuzz_withdrawFundsWhileSaleIsLive(
         uint256 stablecoin,
         uint24 amountNoDecimals,
-        NftsToLock memory nftsToLock,
-        address to
+        NftsToLock memory nftsToLock
     ) public {
-        to = address(uint160(_bound(uint160(to), 1, type(uint160).max))); // Prevents address 0 // Prevents address 0
-
         // Deposit and lock NFTs
         testFuzz_depositAndLockNfts(stablecoin, amountNoDecimals, nftsToLock);
 
         // Withdraw
         vm.expectRevert(SaleIsLive.selector);
-        sale.withdrawFunds(to);
+        sale.withdrawFunds();
     }
 
     function testFuzz_withdrawFundsByWrongCaller(
         uint256 stablecoin,
         uint24 amountNoDecimals,
         NftsToLock memory nftsToLock,
-        address caller,
-        address to
+        address caller
     ) public {
         vm.assume(caller != address(this));
-        to = address(uint160(_bound(uint160(to), 1, type(uint160).max))); // Prevents address 0 // Prevents address 0
 
         // Deposit and lock NFTs
         testFuzz_depositAndLockNftsEndsSale(
@@ -1265,24 +1245,7 @@ contract SaleTestTokens is SaleStructs, Test {
         // Withdraw
         vm.prank(caller);
         vm.expectRevert();
-        sale.withdrawFunds(to);
-    }
-
-    function testFuzz_withdrawFundsTo0AddressFails(
-        uint256 stablecoin,
-        uint24 amountNoDecimals,
-        NftsToLock memory nftsToLock
-    ) public {
-        // Deposit and lock NFTs
-        testFuzz_depositAndLockNftsEndsSale(
-            stablecoin,
-            amountNoDecimals,
-            nftsToLock
-        );
-
-        // Withdraw
-        vm.expectRevert(NullAddress.selector);
-        sale.withdrawFunds(address(0));
+        sale.withdrawFunds();
     }
 
     function testFuzz_withdrawFunds(
@@ -1291,12 +1254,9 @@ contract SaleTestTokens is SaleStructs, Test {
         NftsToLock memory nftsToLockA,
         address user,
         uint256 stablecoinB,
-        uint24 amountNoDecimalsB,
-        address to
+        uint24 amountNoDecimalsB
     ) public {
-        to = address(uint160(_bound(uint160(to), 1, type(uint160).max))); // Prevents address 0 // Prevents address 0
         user = address(uint160(_bound(uint160(user), 1, type(uint160).max))); // Prevents address 0
-        vm.assume(user != to);
 
         stablecoinA = _bound(stablecoinA, 0, 2);
         stablecoinB = _bound(stablecoinB, 0, 2);
@@ -1357,10 +1317,10 @@ contract SaleTestTokens is SaleStructs, Test {
         vm.stopPrank();
 
         // Withdraw
-        uint256 usdtBalance = _USDT.balanceOf(to);
-        uint256 usdcBalance = _USDC.balanceOf(to);
-        uint256 daiBalance = _DAI.balanceOf(to);
-        sale.withdrawFunds(to);
+        uint256 usdtBalance = _USDT.balanceOf(address(this));
+        uint256 usdcBalance = _USDC.balanceOf(address(this));
+        uint256 daiBalance = _DAI.balanceOf(address(this));
+        sale.withdrawFunds();
 
         // Check balances
         if (stablecoinA == stablecoinB) {
@@ -1373,7 +1333,7 @@ contract SaleTestTokens is SaleStructs, Test {
                 ? _USDC
                 : _DAI;
             assertEq(
-                stablecoin.balanceOf(to),
+                stablecoin.balanceOf(address(this)),
                 balanceOld +
                     _addDecimals(stablecoinA, MAX_CONTRIBUTIONS_NO_DECIMALS)
             );
@@ -1388,7 +1348,7 @@ contract SaleTestTokens is SaleStructs, Test {
                     ? _USDC
                     : _DAI;
                 assertEq(
-                    stableA.balanceOf(to),
+                    stableA.balanceOf(address(this)),
                     balanceOldA + _addDecimals(stablecoinA, amountNoDecimalsA)
                 );
             }
@@ -1401,7 +1361,7 @@ contract SaleTestTokens is SaleStructs, Test {
                 ? _USDC
                 : _DAI;
             assertEq(
-                stableB.balanceOf(to),
+                stableB.balanceOf(address(this)),
                 balanceOldB +
                     _addDecimals(
                         stablecoinB,

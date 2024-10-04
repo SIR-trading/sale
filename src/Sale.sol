@@ -250,9 +250,7 @@ contract Sale is SaleStructs, Ownable {
 
     /** @notice Withdraws all USDT, USDC & DAI from the contract if the sale is over
      */
-    function withdrawFunds(address to) external onlyOwner {
-        if (to == address(0)) revert NullAddress();
-
+    function withdrawFunds() external onlyOwner {
         // Revert if sale is live
         SaleState memory state_ = _state;
         if (state_.timeSaleEnded == 0) revert SaleIsLive();
@@ -260,37 +258,35 @@ contract Sale is SaleStructs, Ownable {
         // Withdraw USDT
         TransferHelper.safeTransfer(
             _USDT,
-            to,
+            msg.sender,
             IERC20(_USDT).balanceOf(address(this))
         );
 
         // Withdraw USDC
         TransferHelper.safeTransfer(
             _USDC,
-            to,
+            msg.sender,
             IERC20(_USDC).balanceOf(address(this))
         );
 
         // Withdraw DAI
         TransferHelper.safeTransfer(
             _DAI,
-            to,
+            msg.sender,
             IERC20(_DAI).balanceOf(address(this))
         );
     }
 
     /** @notice Withdraws any ERC20 token in case any worthy token (that is not USDT, USDC or DAI) was sent to the contract
      */
-    function withdrawExoticERC20(address token, address to) external onlyOwner {
-        if (to == address(0)) revert NullAddress();
-
+    function withdrawExoticERC20(address token) external onlyOwner {
         // Revert if sale is live
         SaleState memory state_ = _state;
         if (state_.timeSaleEnded == 0) revert SaleIsLive();
 
         TransferHelper.safeTransfer(
             token,
-            to,
+            msg.sender,
             IERC20(token).balanceOf(address(this))
         );
     }
