@@ -1,0 +1,30 @@
+{
+  "name": "sale",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "node script/deployToAnvil.js",
+    "transfer": "node script/transferAssetsToUser.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SIR-trading/sale.git"
+  },
+  "author": "SIR-trading",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/SIR-trading/sale/issues"
+  },
+  "homepage": "https://github.com/SIR-trading/sale#readme",
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.3"
+  }
+}
