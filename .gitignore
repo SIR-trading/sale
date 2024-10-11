@@ -15,6 +15,3 @@ docs/
 
 # Workspace files
 sale.code-workspace*
-
-# Node.js
-node_modules/
