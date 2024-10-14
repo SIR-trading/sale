@@ -2,7 +2,7 @@
 source .env
 
 # Run the Anvil server
-anvil  -p $PORT --fork-url "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_APIKEY}" --fork-block-number 20944804 &
+anvil --chain-id 1337 -p $PORT --fork-url "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_APIKEY}" --fork-block-number 20944804 &
 ANVIL_PID=$!
 
 # Impersonate automatically
