@@ -1254,7 +1254,7 @@ contract SaleTestTokens is SaleStructs, Test {
         uint256 stablecoinB,
         uint24 amountNoDecimalsB
     ) public {
-        user = address(uint160(_bound(uint160(user), 1, type(uint160).max))); // Prevents address 0
+        user = address(uint160(_bound(uint160(user), 2, type(uint160).max))); // Prevents address 0 and 1. Address 1 fails with USDT
 
         stablecoinA = _bound(stablecoinA, 0, 2);
         stablecoinB = _bound(stablecoinB, 0, 2);
