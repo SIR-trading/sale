@@ -9,20 +9,21 @@ ANVIL_PID=$!
 cast rpc anvil_autoImpersonateAccount true --rpc-url "http://localhost:${PORT}"
 
 # Send a bunch of Buterin Cards to the user
+nftHolder="0xA686bBF15C0a8958FB80cc91Caf649866979D733"
 buterinCardsAddress="0x5726C14663A1EaD4A7D320E8A653c9710b2A2E89"
-cast send $buterinCardsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 0 --rpc-url "http://localhost:${PORT}" --unlocked
-cast send $buterinCardsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 399 --rpc-url "http://localhost:${PORT}" --unlocked
-cast send $buterinCardsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 623 --rpc-url "http://localhost:${PORT}" --unlocked
-cast send $buterinCardsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 820 --rpc-url "http://localhost:${PORT}" --unlocked
-cast send $buterinCardsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 1596 --rpc-url "http://localhost:${PORT}" --unlocked
-cast send $buterinCardsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 2007 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $buterinCardsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 0 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $buterinCardsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 399 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $buterinCardsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 623 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $buterinCardsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 820 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $buterinCardsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 1596 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $buterinCardsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 2007 --rpc-url "http://localhost:${PORT}" --unlocked
 
 # Send a bunch of Mined JPEGs to the user
 minedJpegsAddress="0x7cd51FA7E155805C34F333ba493608742A67Da8e"
-cast send $minedJpegsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 26 --rpc-url "http://localhost:${PORT}" --unlocked
-cast send $minedJpegsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 27 --rpc-url "http://localhost:${PORT}" --unlocked
-cast send $minedJpegsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 29 --rpc-url "http://localhost:${PORT}" --unlocked
-cast send $minedJpegsAddress --from $NFT_HOLDER "safeTransferFrom(address,address,uint256)" $NFT_HOLDER $USER_ADDRESS 30 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $minedJpegsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 26 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $minedJpegsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 27 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $minedJpegsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 29 --rpc-url "http://localhost:${PORT}" --unlocked
+cast send $minedJpegsAddress --from $nftHolder "safeTransferFrom(address,address,uint256)" $nftHolder $USER_ADDRESS 30 --rpc-url "http://localhost:${PORT}" --unlocked
 
 # Send 1M USDT, USDC, and DAI to the user
 stablecoinRichieAddress="0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7"

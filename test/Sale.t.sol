@@ -8,7 +8,6 @@ import {SafeERC20} from "openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import {IERC721Enumerable} from "openzeppelin/token/ERC721/extensions/IERC721Enumerable.sol";
 import {SaleStructs} from "../src/SaleStructs.sol";
 
-/// @dev The environment varible NFT_HOLDER must be set to the address of someone holding at least 6 Buterin Cards and Mined JPEGs in total.
 contract SaleTest is SaleStructs, Test {
     Sale sale;
 
@@ -150,7 +149,7 @@ contract SaleTestTokens is SaleStructs, Test {
 
     address alice;
     address bob;
-    address nft_user;
+    address nft_user = 0xA686bBF15C0a8958FB80cc91Caf649866979D733;
 
     function setUp() public {
         vm.createSelectFork("mainnet", 20568633);
@@ -160,7 +159,6 @@ contract SaleTestTokens is SaleStructs, Test {
 
         alice = address(0x123);
         bob = address(0x456);
-        nft_user = vm.envAddress("NFT_HOLDER");
 
         // Ensure nft_user holds NFTs
         assert(_BUTERIN_CARDS.balanceOf(nft_user) > 0);
