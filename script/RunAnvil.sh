@@ -39,7 +39,7 @@ cast send "0x6B175474E89094C44Da98b954EedeAC495271d0F" --from $stablecoinRichieA
 cast rpc anvil_setBalance $USER_ADDRESS 0xFFFFFFFFFFFFFFFF --rpc-url "http://localhost:${PORT}"
 
 # Deploy the Sale contract
-forge create --rpc-url http://localhost:8545 --private-key $DEPLOYER_PRIVATE_KEY src/Sale.sol:Sale
+forge create --rpc-url "http://localhost:${PORT}" --private-key $DEPLOYER_PRIVATE_KEY src/Sale.sol:Sale
 
 # Wait for the Anvil process to terminate
 echo "Initialization complete! Anvil running on port $PORT".
