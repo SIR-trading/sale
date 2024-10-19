@@ -1,11 +1,13 @@
+#!/bin/bash
+
 # Load the environment variables
-source ./.env
+source /root/.env
 
 # Get the current Unix timestamp (in seconds)
 CURRENT_TIMESTAMP=$(date +%s)
 
-## Run the Anvil server
-anvil --chain-id 1337 -p $PORT --fork-url "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_APIKEY}" --fork-block-number 20944804 --timestamp  $CURRENT_TIMESTAMP &
+# Run the Anvil server
+anvil --chain-id 1337 -p $PORT --fork-url "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_APIKEY}" --fork-block-number 20944804 --timestamp $CURRENT_TIMESTAMP &
 ANVIL_PID=$!
 
 rpcUrl="https://virtual.mainnet.rpc.tenderly.co/9db3d141-1513-4065-942a-1eb7354aa794"
@@ -36,11 +38,11 @@ cast send $minedJpegsAddress --from $nftHolder "safeTransferFrom(address,address
 stablecoinRichieAddress="0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7"
 cast rpc anvil_setBalance $stablecoinRichieAddress 0xFFFFFFFFFFFFFFFF --rpc-url "http://localhost:${PORT}"
 cast send "0xdAC17F958D2ee523a2206206994597C13D831ec7" --from $stablecoinRichieAddress "transfer(address,uint256)" $USER_ADDRESS \
-    1000000000000 --rpc-url "http://localhost:${PORT}" --unlocked # USDT
+  1000000000000 --rpc-url "http://localhost:${PORT}" --unlocked # USDT
 cast send "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" --from $stablecoinRichieAddress "transfer(address,uint256)" $USER_ADDRESS \
-    1000000000000 --rpc-url "http://localhost:${PORT}" --unlocked # USDC
+  1000000000000 --rpc-url "http://localhost:${PORT}" --unlocked # USDC
 cast send "0x6B175474E89094C44Da98b954EedeAC495271d0F" --from $stablecoinRichieAddress "transfer(address,uint256)" $USER_ADDRESS \
-    1000000000000000000000000 --rpc-url "http://localhost:${PORT}" --unlocked # DAI
+  1000000000000000000000000 --rpc-url "http://localhost:${PORT}" --unlocked # DAI
 
 # Transfer ETH to the user
 cast rpc anvil_setBalance $USER_ADDRESS 0xFFFFFFFFFFFFFFFF --rpc-url "http://localhost:${PORT}"

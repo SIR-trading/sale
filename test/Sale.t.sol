@@ -1615,6 +1615,42 @@ contract SaleTestTokens is SaleStructs, Test {
             true
         );
     }
+
+    function testFuzz_lockNfts(uint16[] memory buterinCardIds, uint8[] memory minedJpegIds) public {
+        address nft_user = 0xA686bBF15C0a8958FB80cc91Caf649866979D733;
+
+        vm.startPrank(nft_user);
+
+        // Ensure nft_user holds NFTs
+        bytes32 expectedTokenId;
+        for(uint i = 0; i < buterinCardIds.length; i++) {
+            expectedTokenId = keccak256(abi.encodePacked(address(_BUTERIN_CARDS), nft_user, buterinCardIds[i]));
+            assertEq(_BUTERIN_CARDS.ownerOf(buterinCardIds[i]), nft_user, string(abi.encodePacked("Expected owner of ID ", expectedTokenId, " to be the nft_user.")));
+        }
+        for(uint i = 0; i < minedJpegIds.length; i++) {
+            expectedTokenId = keccak256(abi.encodePacked(address(_MINED_JPEG), nft_user, minedJpegIds[i]));
+            assertEq(_MINED_JPEG.ownerOf(minedJpegIds[i]), nft_user, string(abi.encodePacked("Expected owner of ID ", expectedTokenId, " to be the nft_user.")));
+        }
+
+        // NFT user approve contract
+        _BUTERIN_CARDS.setApprovalForAll(address(sale), true);
+        _MINED_JPEG.setApprovalForAll(address(sale), true);
+
+        // Lock NFTs
+        sale.lockNfts(buterinCardIds, minedJpegIds);
+
+        // Check owner of NFTs after lock
+        for(uint i = 0; i < buterinCardIds.length; i++) {
+            expectedTokenId = keccak256(abi.encodePacked(address(_BUTERIN_CARDS), address(sale), buterinCardIds[i]));
+            assertEq(_BUTERIN_CARDS.ownerOf(buterinCardIds[i]), address(sale), string(abi.encodePacked("Expected owner of ID ", expectedTokenId, " to be the sale contract.")));
+        }
+        for(uint i = 0; i < minedJpegIds.length; i++) {
+            expectedTokenId = keccak256(abi.encodePacked(address(_MINED_JPEG), address(sale), minedJpegIds[i]));
+            assertEq(_MINED_JPEG.ownerOf(minedJpegIds[i]), address(sale), string(abi.encodePacked("Expected owner of ID ", expectedTokenId, " to be the sale contract.")));
+        }
+
+        vm.stopPrank();
+    }
 }
 
 contract MockToken is ERC20 {
