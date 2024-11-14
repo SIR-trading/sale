@@ -610,6 +610,7 @@ contract SaleTestTokens is SaleStructs, Test {
             vm.expectEmit();
             emit DepositWasReduced();
         }
+        vm.expectEmit();
         emit SaleEnded(uint40(block.timestamp));
         for (uint256 i = 0; i < buterinCardIds.length; i++) {
             vm.expectEmit();
@@ -619,7 +620,8 @@ contract SaleTestTokens is SaleStructs, Test {
             vm.expectEmit();
             emit MinedJpegLocked(minedJpegIds[i]);
         }
-        emit Deposit(Stablecoin(stablecoin), amountNoDecimals);
+        vm.expectEmit();
+        emit Deposit(Stablecoin(stablecoin), MAX_CONTRIBUTIONS_NO_DECIMALS);
         sale.depositAndLockNfts(
             Stablecoin(stablecoin),
             amountNoDecimals,
@@ -644,6 +646,14 @@ contract SaleTestTokens is SaleStructs, Test {
             MAX_CONTRIBUTIONS_NO_DECIMALS
         );
         vm.stopPrank();
+
+        // Check contributor's state
+        Contribution memory contribution = sale.contributions(nft_user);
+        assertEq(
+            contribution.amountFinalNoDecimals,
+            MAX_CONTRIBUTIONS_NO_DECIMALS
+        );
+        assertEq(contribution.amountWithdrawableNoDecimals, 0);
     }
 
     function testFuzz_redepositWrongStablecoin(
@@ -835,7 +845,14 @@ contract SaleTestTokens is SaleStructs, Test {
             vm.expectEmit();
             emit MinedJpegLocked(minedJpegIds[i]);
         }
-        emit Deposit(Stablecoin(stablecoin2), amountNoDecimals2);
+        vm.expectEmit();
+        emit Deposit(
+            Stablecoin(stablecoin2),
+            uint256(amountNoDecimals1) + amountNoDecimals2 >
+                MAX_CONTRIBUTIONS_NO_DECIMALS
+                ? MAX_CONTRIBUTIONS_NO_DECIMALS - amountNoDecimals1
+                : amountNoDecimals2
+        );
         sale.depositAndLockNfts(
             Stablecoin(stablecoin2),
             amountNoDecimals2,

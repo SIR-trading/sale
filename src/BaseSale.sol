@@ -326,7 +326,9 @@ abstract contract BaseSale is SaleStructs, Ownable {
         unchecked {
             Contribution memory contribution = _contributions[contributor];
             if (
-                block.timestamp >= contribution.timeLastContribution + 24 hours
+                block.timestamp >=
+                contribution.timeLastContribution + 24 hours ||
+                _state.timeSaleEnded > 0
             ) {
                 // If 24 hours have passed since the last deposit, the user cannot withdraw the previous deposit
                 contribution.amountFinalNoDecimals += contribution
