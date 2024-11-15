@@ -17,14 +17,16 @@ contract DeployToSepolia is Script {
     function run() public {
         vm.startBroadcast(privateKey);
 
-        // Deploy mock Mined JPEG and Butterin Cards
-        address minedJpeg = address(new MockNFT("Mined JPEG", "MJ"));
-        address butterinCards = address(
-            new MockNFT("Butterin Cards", "VITALIK")
-        );
+        // // Deploy mock Mined JPEG and Butterin Cards
+        // address minedJpeg = address(new MockNFT("Mined JPEG", "MJ"));
+        // address butterinCards = address(
+        //     new MockNFT("Butterin Cards", "VITALIK")
+        // );
+        address minedJpeg = 0x8Cde5620D62E03826b114b307A58EB0B637a888a;
+        address butterinCards = 0x5e7a7E1200d378f07Dd3006F99111bb07c12580f;
 
-        console.log("Mined JPEG address:", minedJpeg);
-        console.log("Butterin Cards address:", butterinCards);
+        // console.log("Mined JPEG address:", minedJpeg);
+        // console.log("Butterin Cards address:", butterinCards);
 
         // Deploy sale contract
         address sale = address(new SepoliaSale(minedJpeg, butterinCards));
