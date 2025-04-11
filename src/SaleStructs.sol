@@ -7,7 +7,7 @@ contract SaleStructs {
     event SaleEnded(uint40 timeSaleEnded);
     event DepositWasReduced();
 
-    event Deposit(Stablecoin stablecoin, uint24 amountNoDecimals); // NOT USED YET!
+    event Deposit(Stablecoin stablecoin, uint24 amountNoDecimals);
     event Withdrawal(Stablecoin stablecoin, uint24 amountNoDecimals);
     event ButerinCardLocked(uint16 tokenId);
     event MinedJpegLocked(uint8 tokenId);
